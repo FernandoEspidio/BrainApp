@@ -1,0 +1,21 @@
+# Xcode
+.DS_Store
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+Build/
+
+# Swift Package Manager
+.build/
+.swiftpm/xcode/package.xcworkspace/xcuserdata/
+
+# Temporary files
+*.swp
+*.tmp
+*.log
+
+# Secrets
+.env
+.env.local
+Secrets.xcconfig
