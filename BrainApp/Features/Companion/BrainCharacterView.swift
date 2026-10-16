@@ -52,26 +52,26 @@ struct BrainCharacterView: View {
 
 enum BrainDrawing {
     /// The unit box is drawn with a 10-unit margin so props can stick out a bit.
-    private static let box: CGFloat = 220
-    private static let margin: CGFloat = 10
+    static let box: CGFloat = 220
+    static let margin: CGFloat = 10
 
     static let ink = Theme.ink
     static let white = Color.white
 
-    private static let bumps: [(CGFloat, CGFloat, CGFloat)] = [
+    static let bumps: [(CGFloat, CGFloat, CGFloat)] = [
         (64, 72, 26), (89, 58, 28), (115, 58, 28), (139, 73, 25),
         (47, 99, 23), (153, 99, 23), (70, 98, 30), (100, 94, 32), (130, 98, 30),
         (62, 121, 22), (88, 127, 24), (113, 127, 24), (139, 121, 22)
     ]
 
-    private static let folds = [
+    static let folds = [
         "M100,38 C95,52 105,62 100,76",
         "M70,56 C77,63 70,71 78,77", "M130,56 C123,63 130,71 122,77",
         "M45,90 C54,92 56,100 51,106", "M155,90 C146,92 144,100 149,106",
         "M70,118 C77,113 84,117 86,124", "M130,118 C123,113 116,117 114,124"
     ]
 
-    private static let arms: [BrainMood: [String]] = [
+    static let arms: [BrainMood: [String]] = [
         .idle: ["M27,112 C16,122 14,132 18,142", "M173,110 C186,104 190,92 186,80"],
         .moving: ["M25,104 C14,96 14,84 22,74", "M175,104 C186,96 186,84 178,74"],
         .learning: ["M30,116 C44,132 60,138 74,136", "M170,116 C156,132 140,138 126,136"],
@@ -81,12 +81,12 @@ enum BrainDrawing {
         .resting: []
     ]
 
-    private static let hands: [BrainMood: [CGPoint]] = [
+    static let hands: [BrainMood: [CGPoint]] = [
         .idle: [CGPoint(x: 186, y: 77)],
         .celebrating: [CGPoint(x: 14, y: 69), CGPoint(x: 186, y: 69)]
     ]
 
-    private static func unitContext(_ context: GraphicsContext, size: CGSize) -> GraphicsContext {
+    static func unitContext(_ context: GraphicsContext, size: CGSize) -> GraphicsContext {
         var ctx = context
         let scale = min(size.width, size.height) / box
         ctx.translateBy(x: (size.width - box * scale) / 2 + margin * scale,
@@ -141,20 +141,20 @@ enum BrainDrawing {
         if mood == .resting { drawBlanketFront(ctx) }
     }
 
-    private static func stroke(_ ctx: GraphicsContext, _ d: String, _ color: Color, width: CGFloat) {
+    static func stroke(_ ctx: GraphicsContext, _ d: String, _ color: Color, width: CGFloat) {
         ctx.stroke(UnitPath.parse(d), with: .color(color),
                    style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
     }
 
-    private static func circle(_ x: CGFloat, _ y: CGFloat, _ r: CGFloat) -> Path {
+    static func circle(_ x: CGFloat, _ y: CGFloat, _ r: CGFloat) -> Path {
         Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2))
     }
 
-    private static func ellipse(_ x: CGFloat, _ y: CGFloat, _ rx: CGFloat, _ ry: CGFloat) -> Path {
+    static func ellipse(_ x: CGFloat, _ y: CGFloat, _ rx: CGFloat, _ ry: CGFloat) -> Path {
         Path(ellipseIn: CGRect(x: x - rx, y: y - ry, width: rx * 2, height: ry * 2))
     }
 
-    private static func drawBody(_ ctx: GraphicsContext, variant: Theme.BrainVariant) {
+    static func drawBody(_ ctx: GraphicsContext, variant: Theme.BrainVariant) {
         // Outline trick: bigger circles in the shade color, then the fill on top.
         for (x, y, r) in bumps { ctx.fill(circle(x, y, r + 3.5), with: .color(variant.shade)) }
         for (x, y, r) in bumps { ctx.fill(circle(x, y, r), with: .color(variant.fill)) }
@@ -163,7 +163,7 @@ enum BrainDrawing {
         for d in folds { stroke(ctx, d, variant.shade, width: 3) }
     }
 
-    private static func drawLegs(_ ctx: GraphicsContext, mood: BrainMood) {
+    static func drawLegs(_ ctx: GraphicsContext, mood: BrainMood) {
         guard mood != .resting else { return }
         stroke(ctx, "M90,148 L88,170", ink, width: 3.5)
         stroke(ctx, "M110,148 L112,170", ink, width: 3.5)
@@ -171,7 +171,7 @@ enum BrainDrawing {
         ctx.fill(ellipse(116, 173, 9, 5), with: .color(ink))
     }
 
-    private static func drawArms(_ ctx: GraphicsContext, mood: BrainMood, variant: Theme.BrainVariant) {
+    static func drawArms(_ ctx: GraphicsContext, mood: BrainMood, variant: Theme.BrainVariant) {
         for d in arms[mood] ?? [] { stroke(ctx, d, ink, width: 3.5) }
         for hand in hands[mood] ?? [] {
             ctx.fill(circle(hand.x, hand.y, 5), with: .color(variant.fill))
@@ -179,7 +179,7 @@ enum BrainDrawing {
         }
     }
 
-    private static func drawFace(_ ctx: GraphicsContext, mood: BrainMood, blink: Bool) {
+    static func drawFace(_ ctx: GraphicsContext, mood: BrainMood, blink: Bool) {
         let eyeY: CGFloat = 100
         if mood == .resting || blink {
             for x: CGFloat in [84, 116] {
@@ -210,7 +210,7 @@ enum BrainDrawing {
         }
     }
 
-    private static func drawProps(_ ctx: GraphicsContext, mood: BrainMood, time: TimeInterval?) {
+    static func drawProps(_ ctx: GraphicsContext, mood: BrainMood, time: TimeInterval?) {
         switch mood {
         case .resting:
             ctx.fill(UnitPath.parse("M58,66 C70,40 110,28 150,36 L132,64 Z"), with: .color(Theme.lavender))
@@ -268,14 +268,14 @@ enum BrainDrawing {
         }
     }
 
-    private static func drawGlasses(_ ctx: GraphicsContext) {
+    static func drawGlasses(_ ctx: GraphicsContext) {
         for x: CGFloat in [84, 116] {
             ctx.stroke(circle(x, 100, 11), with: .color(ink), lineWidth: 2.5)
         }
         stroke(ctx, "M95,100 L105,100", ink, width: 2.5)
     }
 
-    private static func drawAccessory(_ ctx: GraphicsContext, accessory: CompanionAppearance.Accessory, mood: BrainMood) {
+    static func drawAccessory(_ ctx: GraphicsContext, accessory: CompanionAppearance.Accessory, mood: BrainMood) {
         switch accessory {
         case .none:
             break
@@ -298,11 +298,11 @@ enum BrainDrawing {
         }
     }
 
-    private static func drawBlanketBack(_ ctx: GraphicsContext) {
+    static func drawBlanketBack(_ ctx: GraphicsContext) {
         ctx.fill(UnitPath.parse("M30,150 C60,136 140,136 170,150 L176,180 L24,180 Z"), with: .color(Theme.lavender.opacity(0.9)))
     }
 
-    private static func drawBlanketFront(_ ctx: GraphicsContext) {
+    static func drawBlanketFront(_ ctx: GraphicsContext) {
         ctx.fill(UnitPath.parse("M26,150 C60,140 140,140 174,150 L178,176 C140,170 60,170 22,176 Z"), with: .color(Color(hex: 0xA8A1F0)))
     }
 }

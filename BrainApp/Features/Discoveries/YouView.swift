@@ -54,6 +54,9 @@ struct YouView: View {
                         NavigationLink { Brain3DPreviewView() } label: {
                             Tile(title: "3D buddy (preview)", symbol: "cube.transparent", tint: Theme.Tint.lilac)
                         }
+                        NavigationLink { FacePuppetView() } label: {
+                            Tile(title: "Brain animoji (test)", symbol: "face.smiling", tint: Theme.Tint.mint)
+                        }
                     }
                     .buttonStyle(.plain)
                 }
