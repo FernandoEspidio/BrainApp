@@ -46,13 +46,19 @@ struct AppSnapshot: Codable, Sendable {
     var sensingStartDate: Date?
     /// Detections the user deleted, so the simulator doesn't bring them back.
     var dismissedDetections: Set<UUID> = []
+    /// Ring goals per area (missing = default goal).
+    var goals: [String: AreaGoal] = [:]
+    /// Ring completions already celebrated (see `RingProgress.celebrationKey`).
+    var celebratedRings: Set<String> = []
+    /// The user's brain animoji (a short clip of facial poses) for sharing with friends.
+    var animoji: [FacePose] = []
 
     init() {}
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion, activities, customAreas, priorities, experiments, feedback,
              seenDiscoveries, companion, understandingHighWater, friends, localCardID, hasCompletedOnboarding,
-             userName, simulateSensing, sensingStartDate, dismissedDetections
+             userName, simulateSensing, sensingStartDate, dismissedDetections, goals, celebratedRings, animoji
     }
 
     /// Tolerant decoding: missing keys take their default value.
@@ -76,5 +82,8 @@ struct AppSnapshot: Codable, Sendable {
         simulateSensing = try c.decodeIfPresent(Bool.self, forKey: .simulateSensing) ?? d.simulateSensing
         sensingStartDate = try c.decodeIfPresent(Date.self, forKey: .sensingStartDate)
         dismissedDetections = try c.decodeIfPresent(Set<UUID>.self, forKey: .dismissedDetections) ?? d.dismissedDetections
+        goals = try c.decodeIfPresent([String: AreaGoal].self, forKey: .goals) ?? d.goals
+        celebratedRings = try c.decodeIfPresent(Set<String>.self, forKey: .celebratedRings) ?? d.celebratedRings
+        animoji = try c.decodeIfPresent([FacePose].self, forKey: .animoji) ?? d.animoji
     }
 }

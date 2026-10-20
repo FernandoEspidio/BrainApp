@@ -13,7 +13,7 @@ struct SettingsView: View {
                     set: { model.setDemoMode($0) }
                 ))
             } footer: {
-                Text("Shows fictional examples that live only in memory. Your real entries are not read, modified or mixed in.")
+                Text("Sample data · your entries stay untouched")
             }
 
             Section("Personalization") {
@@ -48,18 +48,17 @@ struct SettingsView: View {
             } header: {
                 Text("Data sources")
             } footer: {
-                Text("This prototype assumes your phone notices sleep, walks, workouts, reading and focus time. Until the real sensors are connected, those moments are simulated and labeled \"detected\". Turning this off stops new ones.")
+                Text("Simulated until real sensors are connected")
             }
 
             Section {
-                Label("No account, no server and no Internet. Everything is processed and stored on this device.",
-                      systemImage: "lock.shield")
+                Label("Stays on this device", systemImage: "lock.shield")
                 Button("Erase all my data", role: .destructive) { confirmErase = true }
             } header: {
                 Text("Privacy")
             } footer: {
                 if repo.isDemo {
-                    Text("You're in demo mode: erasing only resets the examples.")
+                    Text("Demo mode: only resets the examples")
                 }
             }
         }

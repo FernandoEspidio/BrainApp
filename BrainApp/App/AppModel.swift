@@ -9,6 +9,8 @@ final class AppModel {
     private(set) var repository: LocalRepository
     private(set) var isDemoMode: Bool
     private(set) var nearby: NearbySharingCoordinator
+    /// What the user chose to share (Friends tab). Every sharing flow uses it.
+    var shareOptions = ShareOptions()
 
     private let realRepository: LocalRepository
     private static let demoModeKey = "demoMode"
@@ -34,6 +36,9 @@ final class AppModel {
         nearby = NearbySharingCoordinator(transports: NearbyTransportFactory.make(isDemo: enabled))
     }
 
+    /// The card built from the user's current share choices.
+    func makeCard() -> ShareableBrainCard { makeCard(options: shareOptions) }
+
     func makeCard(options: ShareOptions) -> ShareableBrainCard {
         BrainCardFactory.make(
             cardID: repository.snapshot.localCardID,
@@ -41,7 +46,10 @@ final class AppModel {
             stage: repository.companionStage,
             discoveries: repository.rankedDiscoveries,
             options: options,
-            isDemo: repository.isDemo
+            isDemo: repository.isDemo,
+            mood: repository.companionState().mood,
+            rings: repository.rings(),
+            animoji: repository.snapshot.animoji
         )
     }
 

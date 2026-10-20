@@ -32,7 +32,7 @@ struct ThrowTestView: View {
                 landing(card: card, repo: repo)
             }
         }
-        .navigationTitle("Throw test")
+        .navigationTitle("Throw")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if session.isConnected {
@@ -208,7 +208,7 @@ struct ThrowTestView: View {
 
     private func throwBrain(repo: LocalRepository) {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        let card = model.makeCard(options: ShareOptions(selectedDiscoveryIDs: BrainCardFactory.defaultSelection(repo.rankedDiscoveries)))
+        let card = model.makeCard()
         var named = card
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty { named.displayName = String(trimmed.prefix(40)) }

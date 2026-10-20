@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The single card on Home. Short text, at most one action.
+/// The single card on Home. One line, one action. Details live behind ⓘ.
 struct HomeCardView: View {
     let card: HomeCard
     var onOpenDiscovery: (Discovery) -> Void
@@ -11,16 +11,19 @@ struct HomeCardView: View {
     var body: some View {
         Group {
             switch card {
-            case .newDiscovery(let discovery):
-                discoveryRow(discovery, eyebrow: "New about you")
-
-            case .changedDiscovery(let discovery):
-                discoveryRow(discovery, eyebrow: "Something changed")
+            case .newDiscovery(let discovery), .changedDiscovery(let discovery):
+                Button {
+                    onOpenDiscovery(discovery)
+                } label: {
+                    row(symbol: discovery.symbol, tint: Theme.Tint.rose, title: discovery.title, trailing: "info.circle")
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Shows the evidence")
 
             case .checkIn(let activity):
                 VStack(spacing: 12) {
                     HStack {
-                        Text("How was your \(activity.title.lowercased())?")
+                        Text("\(activity.title)?")
                             .font(.headline)
                             .foregroundStyle(Theme.ink)
                         Spacer()
@@ -38,56 +41,37 @@ struct HomeCardView: View {
                 Button {
                     onOpenExperiment(experiment)
                 } label: {
-                    row(symbol: "flask", tint: Theme.Tint.butter, eyebrow: "Your experiment",
-                        title: experiment.question, detail: "\(countLabel(logged, "session", "sessions")) so far")
+                    row(symbol: "flask", tint: Theme.Tint.butter, title: experiment.question, trailing: nil, badge: "\(logged)")
                 }
                 .buttonStyle(.plain)
 
-            case .gettingToKnowYou:
-                row(symbol: "leaf", tint: Theme.Tint.mint, eyebrow: "Getting to know you",
-                    title: "Just live your day.", detail: "Your phone notices the moments. Patterns show up after a few days.")
-
-            case .allQuiet:
-                row(symbol: "checkmark", tint: Theme.Tint.mint, eyebrow: "All quiet",
-                    title: "Nothing new today.", detail: "That's a valid result too.")
+            case .gettingToKnowYou, .allQuiet:
+                EmptyView()
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .cardStyle()
     }
 
-    private func discoveryRow(_ discovery: Discovery, eyebrow: String) -> some View {
-        Button {
-            onOpenDiscovery(discovery)
-        } label: {
-            HStack {
-                row(symbol: discovery.symbol, tint: Theme.Tint.rose, eyebrow: eyebrow,
-                    title: discovery.title, detail: nil)
-                Text("Why?")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.pinkDeep)
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityHint("Shows the evidence")
-    }
-
-    private func row(symbol: String, tint: Color, eyebrow: String, title: String, detail: String?) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            TintedIcon(symbol: symbol, tint: tint)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(eyebrow.uppercased())
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(Theme.inkSoft)
-                Text(title)
-                    .font(.headline)
-                    .foregroundStyle(Theme.ink)
-                    .multilineTextAlignment(.leading)
-                if let detail {
-                    Text(detail).font(.subheadline).foregroundStyle(Theme.inkSoft)
-                }
-            }
+    private func row(symbol: String, tint: Color, title: String, trailing: String?, badge: String? = nil) -> some View {
+        HStack(spacing: 12) {
+            TintedIcon(symbol: symbol, tint: tint, size: 36)
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(Theme.ink)
+                .multilineTextAlignment(.leading)
+                .lineLimit(2)
             Spacer(minLength: 0)
+            if let badge {
+                Text(badge)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(Theme.ink)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(Theme.Tint.butter, in: Capsule())
+            }
+            if let trailing {
+                Image(systemName: trailing).foregroundStyle(Theme.pinkDeep)
+            }
         }
     }
 }

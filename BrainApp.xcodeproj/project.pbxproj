@@ -265,13 +265,13 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = Q92SA53V78;
+				DEVELOPMENT_TEAM = 7UCF5WUTKX;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = BrainApp/Info.plist;
-				INFOPLIST_KEY_NSCameraUsageDescription = "Optional camera assistance helps find the direction of a nearby friend";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Lets your brain buddy copy your face and helps find a nearby friend. Nothing is recorded.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "To swap your brain buddy with a friend's iPhone nearby.";
 				INFOPLIST_KEY_NSNearbyInteractionUsageDescription = "To show how far your friend is when you throw your brain buddy.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -288,7 +288,7 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = BrainApp;
-				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = com.ferEspidio.brainbuddy;
+				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = com.taraneh.brainbuddy;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
@@ -308,13 +308,13 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = Q92SA53V78;
+				DEVELOPMENT_TEAM = 7UCF5WUTKX;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = BrainApp/Info.plist;
-				INFOPLIST_KEY_NSCameraUsageDescription = "Optional camera assistance helps find the direction of a nearby friend";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Lets your brain buddy copy your face and helps find a nearby friend. Nothing is recorded.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "To swap your brain buddy with a friend's iPhone nearby.";
 				INFOPLIST_KEY_NSNearbyInteractionUsageDescription = "To show how far your friend is when you throw your brain buddy.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -331,7 +331,7 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = BrainApp;
-				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = com.ferEspidio.brainbuddy;
+				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = com.taraneh.brainbuddy;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;

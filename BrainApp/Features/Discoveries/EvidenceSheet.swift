@@ -10,7 +10,6 @@ struct EvidenceSheet: View {
     @State private var context = ""
     @State private var notRepresentative = false
     @State private var loaded = false
-    @State private var experimentTemplate: ExperimentTemplate?
 
     var body: some View {
         let repo = model.repository
@@ -40,7 +39,6 @@ struct EvidenceSheet: View {
                     }
                 }
             }
-            .sheet(item: $experimentTemplate) { template in NewExperimentSheet(template: template) }
         }
         .onAppear { loadFeedback(repo) }
         .onDisappear { saveFeedback(repo) }
@@ -88,15 +86,6 @@ struct EvidenceSheet: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(notRepresentative ? .isSelected : [])
-            }
-
-            if let template = discovery.suggestedExperiment, repo.openExperiment == nil {
-                Button {
-                    experimentTemplate = template
-                } label: {
-                    Label("Test it with an experiment", systemImage: "flask")
-                }
-                .buttonStyle(SoftButtonStyle())
             }
 
             VStack(alignment: .leading, spacing: 0) {

@@ -1,13 +1,14 @@
 import SwiftUI
 
-/// For the few things the phone can't detect: type it, the area is guessed, optionally one face.
+/// For the few things the phone can't detect: type it → area is guessed → (optional) one face → Done.
 /// Also used to fix a detected moment.
 struct LogActivitySheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
 
     let existing: Activity?
-    var presetExperimentID: UUID? = nil
+    /// Set when opened from an area button on Today: that area is pre-selected.
+    var presetAreaID: String? = nil
 
     @State private var title = ""
     @State private var date = Date.now
@@ -15,6 +16,7 @@ struct LogActivitySheet: View {
     @State private var areaWasSuggested = false
     @State private var allowSuggestion = true
     @State private var feeling: Int?
+    @State private var duration: Int?
     @State private var measureRating: Int?
     @State private var linkExperiment = false
     @State private var arm: Experiment.Arm = .a
@@ -28,19 +30,20 @@ struct LogActivitySheet: View {
 
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 20) {
                     if let existing, let detection = existing.detection {
-                        Label("Detected by your phone · \(detection.label)", systemImage: detection.symbol)
-                            .font(.footnote)
+                        Label(detection.label, systemImage: detection.symbol)
+                            .font(.caption)
                             .foregroundStyle(Theme.inkSoft)
                     }
 
                     TextField("What did you do?", text: $title)
-                        .font(.title3.weight(.semibold))
+                        .font(.title2.weight(.semibold))
                         .focused($titleFocused)
                         .submitLabel(.done)
                         .onChange(of: title) { _, newValue in suggestArea(for: newValue, repo: repo) }
 
+                    // Area chips. A guessed area is simply pre-selected (with a sparkle), no explanation text.
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             ForEach(repo.areas) { area in
@@ -50,7 +53,7 @@ struct LogActivitySheet: View {
                                     areaWasSuggested = false
                                     allowSuggestion = false
                                 } label: {
-                                    Label(area.name, systemImage: area.symbol)
+                                    Label(area.name, systemImage: isSelected && areaWasSuggested ? "sparkles" : area.symbol)
                                         .font(.subheadline.weight(.semibold))
                                         .foregroundStyle(Theme.ink)
                                         .padding(.horizontal, 12)
@@ -63,56 +66,58 @@ struct LogActivitySheet: View {
                             }
                         }
                     }
-                    if areaWasSuggested {
-                        Text("Area guessed from what you wrote. Tap another to change it.")
-                            .font(.caption)
-                            .foregroundStyle(Theme.inkSoft)
-                    }
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("How did it feel? (optional)").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.ink)
-                        FeelingPicker(selected: feeling) { feeling = feeling == $0 ? nil : $0 }
-                    }
+                    FeelingPicker(selected: feeling) { feeling = feeling == $0 ? nil : $0 }
+                        .frame(maxWidth: .infinity)
 
-                    DatePicker("When", selection: $date)
-                        .font(.subheadline)
-
-                    if let experiment {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Toggle("Part of your experiment", isOn: $linkExperiment)
-                                .font(.subheadline.weight(.semibold))
-                            if linkExperiment {
-                                Picker("Condition", selection: $arm) {
-                                    ForEach(Experiment.Arm.allCases) { arm in
-                                        Text(experiment.label(for: arm)).tag(arm)
-                                    }
+                    // Duration fills minute-based rings (without it, a moment counts as 15 min).
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "timer").foregroundStyle(Theme.inkSoft)
+                            ForEach(durationOptions, id: \.self) { minutes in
+                                let isSelected = duration == minutes
+                                Button {
+                                    withAnimation(.snappy) { duration = isSelected ? nil : minutes }
+                                } label: {
+                                    Text(formatMinutes(minutes))
+                                        .font(.subheadline.weight(.semibold))
+                                        .monospacedDigit()
+                                        .foregroundStyle(isSelected ? Color.white : Theme.ink)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 8)
+                                        .background(isSelected ? Theme.ink : Theme.ink.opacity(0.05), in: Capsule())
                                 }
-                                .pickerStyle(.segmented)
-                                if experiment.measure != .enjoyment {
-                                    Text("\(experiment.measure.label)?").font(.subheadline).foregroundStyle(Theme.inkSoft)
-                                    FeelingPicker(selected: measureRating) { measureRating = measureRating == $0 ? nil : $0 }
-                                }
+                                .buttonStyle(.plain)
+                                .accessibilityAddTraits(isSelected ? .isSelected : [])
                             }
                         }
-                        .cardStyle()
+                    }
+                    .sensoryFeedback(.selection, trigger: duration)
+
+                    HStack {
+                        Image(systemName: "clock").foregroundStyle(Theme.inkSoft)
+                        DatePicker("When", selection: $date)
+                            .labelsHidden()
+                        Spacer()
                     }
 
+
                     if existing != nil {
-                        Button("Delete this moment", role: .destructive) { confirmDelete = true }
+                        Button("Delete", role: .destructive) { confirmDelete = true }
                             .font(.subheadline)
                     }
                 }
                 .padding()
             }
             .background(Theme.cream.ignoresSafeArea())
-            .navigationTitle(existing == nil ? "Add a moment" : "Edit moment")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save(repo: repo, experiment: experiment) }
+                    Button("Done") { save(repo: repo, experiment: experiment) }
                         .disabled(!canSave)
                 }
             }
@@ -132,6 +137,12 @@ struct LogActivitySheet: View {
     }
 
     // MARK: - Logic
+
+    private var durationOptions: [Int] {
+        var options = [15, 30, 45, 60, 90, 120]
+        if let duration, !options.contains(duration) { options.append(duration); options.sort() }
+        return options
+    }
 
     private var canSave: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && areaID != nil
@@ -155,6 +166,7 @@ struct LogActivitySheet: View {
             areaID = activity.areaID
             areaWasSuggested = activity.areaWasSuggested
             feeling = activity.enjoyment
+            duration = activity.durationMinutes
             if let experiment, activity.experimentID == experiment.id {
                 linkExperiment = true
                 arm = activity.experimentArm ?? .a
@@ -162,7 +174,10 @@ struct LogActivitySheet: View {
             }
         } else {
             titleFocused = true
-            if let experiment, presetExperimentID == experiment.id { linkExperiment = true }
+            if let presetAreaID {
+                areaID = presetAreaID
+                allowSuggestion = false
+            }
         }
     }
 
@@ -173,6 +188,7 @@ struct LogActivitySheet: View {
         activity.areaID = areaID
         activity.date = date
         activity.enjoyment = feeling
+        activity.durationMinutes = duration
         activity.areaWasSuggested = areaWasSuggested
 
         if let experiment {

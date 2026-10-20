@@ -17,7 +17,7 @@ struct PeerToPeerTestView: View {
 
         List {
             Section {
-                Text("Test only. Keep Wi-Fi ON on both phones (it doesn't need to be connected to any network: Airplane mode + Wi-Fi back on works). Bluetooth ON helps discovery. Keep the app open and screens on.")
+                Label("Wi-Fi on · app open on both phones", systemImage: "wifi")
                     .font(.footnote)
                     .foregroundStyle(Theme.inkSoft)
             }
@@ -71,7 +71,7 @@ struct PeerToPeerTestView: View {
                     BrainCardView(card: received)
                         .frame(maxWidth: .infinity)
                         .listRowBackground(Color.clear)
-                    Button(saved ? "Saved to Nearby friends ✓" : "Save as friend") {
+                    Button(saved ? "Saved ✓" : "Save as friend") {
                         repo.addFriend(received, via: .peerToPeer)
                         saved = true
                     }
@@ -99,7 +99,7 @@ struct PeerToPeerTestView: View {
                 }
             }
         }
-        .navigationTitle("P2P test")
+        .navigationTitle("Swap")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             if shownName.isEmpty {
@@ -132,7 +132,7 @@ struct PeerToPeerTestView: View {
     /// The same privacy-filtered card used for sharing, with a custom display name for the test.
     private func currentCard() -> ShareableBrainCard {
         let repo = model.repository
-        var card = model.makeCard(options: ShareOptions(selectedDiscoveryIDs: BrainCardFactory.defaultSelection(repo.rankedDiscoveries)))
+        var card = model.makeCard()
         let name = shownName.trimmingCharacters(in: .whitespacesAndNewlines)
         if !name.isEmpty { card.displayName = String(name.prefix(40)) }
         return card

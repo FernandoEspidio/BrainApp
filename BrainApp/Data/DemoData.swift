@@ -82,7 +82,16 @@ enum DemoData {
                 SharedHighlight(title: "Possible strength: movement", symbol: "figure.walk", levelLabel: "Possible strength")
             ],
             createdAt: .now,
-            isDemo: true
+            isDemo: true,
+            mood: BrainMood.moving.rawValue,
+            rings: [
+                SharedRing(areaID: LifeArea.rest.id, percent: 82),
+                SharedRing(areaID: LifeArea.learning.id, percent: 40),
+                SharedRing(areaID: LifeArea.movement.id, percent: 135),
+                SharedRing(areaID: LifeArea.creativity.id, percent: 100),
+                SharedRing(areaID: LifeArea.social.id, percent: 67)
+            ],
+            animoji: AnimojiClip.frames(for: .wink)
         )
     }
 }

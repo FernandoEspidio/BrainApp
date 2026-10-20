@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Two tabs: Today (the brain) and You (what it has learned).
+/// Four tabs, one job each. Every feature is reachable from a visible tab → list → detail.
+/// Ring completions are celebrated here so they show up wherever the user is.
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
@@ -14,7 +15,21 @@ struct RootView: View {
                     HomeView()
                         .tabItem { Label("Today", systemImage: "brain.head.profile") }
                     YouView()
-                        .tabItem { Label("You", systemImage: "sparkles") }
+                        .tabItem { Label("Insights", systemImage: "sparkles") }
+                    FriendsTab()
+                        .tabItem { Label("Friends", systemImage: "person.2") }
+                    MeView()
+                        .tabItem { Label("Me", systemImage: "person.crop.circle") }
+                }
+                .overlay {
+                    // A ring just reached 100%: celebrate once, wherever the user is.
+                    if let ring = model.repository.nextCelebration() {
+                        CelebrationOverlay(ring: ring) {
+                            withAnimation(.easeOut(duration: 0.3)) { model.repository.markCelebrated(ring) }
+                        }
+                        .id(ring.celebrationKey)
+                        .transition(.opacity)
+                    }
                 }
             }
         }
@@ -37,5 +52,12 @@ struct RootView: View {
             get: { model.repository.lastError != nil },
             set: { if !$0 { model.repository.lastError = nil } }
         )
+    }
+}
+
+/// Friends tab: your brain card, sending it, and your friends' brains.
+struct FriendsTab: View {
+    var body: some View {
+        NavigationStack { NearbyFriendsView() }
     }
 }

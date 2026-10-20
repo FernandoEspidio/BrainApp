@@ -14,6 +14,12 @@ enum TransportKind: String, Codable, Sendable {
     }
 }
 
+/// One ring as shared: area and percentage only (no minutes, no moments).
+struct SharedRing: Codable, Hashable, Sendable {
+    var areaID: String
+    var percent: Int
+}
+
 struct SharedHighlight: Codable, Hashable, Sendable {
     var title: String
     var symbol: String
@@ -22,7 +28,9 @@ struct SharedHighlight: Codable, Hashable, Sendable {
 
 /// The ONLY thing that leaves the device when sharing (exported image or nearby exchange).
 /// By design it contains no entries, schedules, ratings, notes or health data:
-/// only the companion's identity and the titles of chosen discoveries.
+/// only the companion's identity and what the user chose to include —
+/// discoveries (traits), current mood, ring percentages and a short brain animoji.
+/// The optional fields are new: older cards without them still decode.
 struct ShareableBrainCard: Codable, Hashable, Identifiable, Sendable {
     static let currentVersion = 1
 
@@ -35,6 +43,13 @@ struct ShareableBrainCard: Codable, Hashable, Identifiable, Sendable {
     var highlights: [SharedHighlight]
     var createdAt: Date
     var isDemo: Bool
+    /// `BrainMood` raw value.
+    var mood: String?
+    var rings: [SharedRing]?
+    /// A few seconds of facial poses (~50 bytes each), played back as the brain animoji.
+    var animoji: [FacePose]?
+
+    var brainMood: BrainMood? { mood.flatMap(BrainMood.init(rawValue:)) }
 
     /// Data received from another device is untrusted: it is trimmed and normalized.
     func sanitized() -> ShareableBrainCard {
@@ -49,6 +64,11 @@ struct ShareableBrainCard: Codable, Hashable, Identifiable, Sendable {
                             symbol: Self.safeSymbol(highlight.symbol),
                             levelLabel: String(highlight.levelLabel.prefix(30)))
         }
+        if card.brainMood == nil { card.mood = nil }
+        card.rings = rings.map { list in
+            list.prefix(LifeArea.builtIns.count).map { SharedRing(areaID: String($0.areaID.prefix(40)), percent: max(0, min($0.percent, 999))) }
+        }
+        card.animoji = animoji.map { frames in frames.prefix(AnimojiClip.maxFrames).map { $0.clamped() } }
         return card
     }
 
@@ -58,10 +78,15 @@ struct ShareableBrainCard: Codable, Hashable, Identifiable, Sendable {
     }
 }
 
+/// What the user chose to share. One set of choices, used by every sharing flow.
 struct ShareOptions: Hashable {
     static let maxHighlights = 3
     var selectedDiscoveryIDs: [String] = []
     var includeSchedulePatterns = false
+    var includeTraits = true
+    var includeMood = true
+    var includeRings = true
+    var includeAnimoji = true
 }
 
 /// Builds the card applying the privacy filter.
@@ -77,11 +102,14 @@ enum BrainCardFactory {
     }
 
     static func make(cardID: UUID, appearance: CompanionAppearance, stage: Int, discoveries: [Discovery],
-                     options: ShareOptions, isDemo: Bool, now: Date = .now) -> ShareableBrainCard {
+                     options: ShareOptions, isDemo: Bool, mood: BrainMood? = nil, rings: [RingProgress] = [],
+                     animoji: [FacePose] = [], now: Date = .now) -> ShareableBrainCard {
         let allowed = shareable(discoveries, options: options)
-        let chosen = options.selectedDiscoveryIDs
-            .compactMap { id in allowed.first { $0.id == id } }
-            .prefix(ShareOptions.maxHighlights)
+        // No explicit pick yet → the top shareable discoveries.
+        let ids = options.selectedDiscoveryIDs.isEmpty ? defaultSelection(discoveries) : options.selectedDiscoveryIDs
+        let chosen = options.includeTraits
+            ? Array(ids.compactMap { id in allowed.first { $0.id == id } }.prefix(ShareOptions.maxHighlights))
+            : []
         return ShareableBrainCard(
             id: cardID,
             protocolVersion: ShareableBrainCard.currentVersion,
@@ -91,7 +119,11 @@ enum BrainCardFactory {
             stageName: CompanionStage.name(stage),
             highlights: chosen.map { SharedHighlight(title: $0.title, symbol: $0.symbol, levelLabel: $0.level.label) },
             createdAt: now,
-            isDemo: isDemo
+            isDemo: isDemo,
+            mood: options.includeMood ? mood?.rawValue : nil,
+            rings: options.includeRings && !rings.isEmpty
+                ? rings.map { SharedRing(areaID: $0.area.id, percent: $0.percent) } : nil,
+            animoji: options.includeAnimoji && !animoji.isEmpty ? animoji : nil
         )
     }
 }

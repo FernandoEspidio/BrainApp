@@ -4,7 +4,7 @@ import Observation
 
 /// The few facial values the brain uses (0…1, angles in radians). ~50 bytes per frame:
 /// recording these instead of video is what makes sharing "brain animojis" cheap later.
-struct FacePose: Equatable, Codable {
+struct FacePose: Hashable, Codable, Sendable {
     /// Eyes as they appear ON SCREEN (mirrored like a selfie): left = screen left.
     var leftEyeOpen: Float = 1
     var rightEyeOpen: Float = 1

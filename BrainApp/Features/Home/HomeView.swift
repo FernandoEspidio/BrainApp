@@ -1,24 +1,32 @@
 import SwiftUI
 
-/// Today: greeting, the brain doing what you did, one line of why, today's moments and ONE card.
-/// No bars, no dashboards. Most moments arrive on their own (detected by the phone).
+/// Today: the brain animoji is the screen.
+/// - Its face shows your current state (sleepy, focused, happier as rings fill).
+/// - Tap it: it reacts and tells you one real insight (tap the bubble to open that ring).
+/// - Drag it: it looks around. (Mirror me / sharing lives in Friends.)
+/// - Below: today's five rings (tap → goal detail) and one card.
 struct HomeView: View {
     @Environment(AppModel.self) private var model
-    @State private var previewMoment: UUID?
+    @AppStorage("hasTappedBrain") private var hasTappedBrain = false
+
     @State private var poke = 0
-    @State private var showLog = false
+    @State private var reaction: ActiveReaction?
+    @State private var line: BrainLine?
+    @State private var lineIndex = 0
+    @State private var logRequest: LogRequest?
     @State private var evidenceTarget: Discovery?
-    @State private var experimentRoute: UUID?
 
     var body: some View {
         let repo = model.repository
         let live = repo.companionState()
-        let moments = repo.todayMoments()
-        let preview = moments.first { $0.id == previewMoment }
-        let mood = preview?.mood ?? live.mood
-        let reason = preview.map { repo.describe($0.activity, prefix: $0.activity.date.formatted(date: .omitted, time: .shortened)) } ?? live.reason
+        let rings = repo.rings()
+        let mood = live.mood
         let night = mood.isNight
         let ink = night ? Color.white : Theme.ink
+        let card = repo.homeCard()
+        let base = BrainExpressions.base(mood: mood, overallProgress: repo.overallProgress(),
+                                         anyRingClosed: rings.contains(where: \.isComplete))
+        let bubbleText = line?.text ?? mood.title
 
         NavigationStack {
             ZStack {
@@ -29,45 +37,96 @@ struct HomeView: View {
                         header(repo: repo, ink: ink)
                         if repo.isDemo { DemoBanner() }
 
-                        BrainAvatarView(appearance: repo.snapshot.companion, stage: live.stage, mood: mood,
-                                        size: 300, showsStage: true, poke: poke)
-                            .onTapGesture { poke += 1 }
-                            .accessibilityAddTraits(.isButton)
-                            .accessibilityHint("Tap to say hi")
-
+                        // The brain
                         VStack(spacing: 4) {
-                            Text(mood.title)
-                                .font(.title3.weight(.bold))
-                                .foregroundStyle(ink)
-                            Text(reason)
-                                .font(.footnote)
-                                .foregroundStyle(night ? Color.white.opacity(0.7) : Theme.inkSoft)
-                                .multilineTextAlignment(.center)
+                            bubble(text: bubbleText, ringID: line?.ringID)
+                            BrainBuddyView(
+                                appearance: repo.snapshot.companion,
+                                mood: mood,
+                                basePose: base,
+                                livePose: nil,
+                                reaction: reaction,
+                                stage: live.stage,
+                                poke: poke,
+                                onTap: { tapBrain(repo: repo, mood: mood) }
+                            )
+                            .frame(width: 270, height: 270)
+                            .sensoryFeedback(.impact(weight: .light), trigger: poke)
+                            tapHint(ink: ink)
                         }
-                        .animation(.easeInOut, value: mood)
 
-                        if !moments.isEmpty {
-                            TodayStrip(moments: moments, selected: $previewMoment, night: night)
+                        // Today's rings
+                        RingTileRow(rings: rings, ringSize: 46, showsNames: false)
+                            .padding(.vertical, 4)
+                            .cardStyle(padding: 14)
+                            .padding(.horizontal)
+
+                        if card.isShown {
+                            HomeCardView(
+                                card: card,
+                                onOpenDiscovery: { evidenceTarget = $0 },
+                                onFeeling: { activity, value in repo.setFeeling(value, for: activity.id) },
+                                onSkip: { repo.skipCheckIn($0.id) },
+                                onOpenExperiment: { _ in }
+                            )
+                            .padding(.horizontal)
                         }
-
-                        HomeCardView(
-                            card: repo.homeCard(),
-                            onOpenDiscovery: { evidenceTarget = $0 },
-                            onFeeling: { activity, value in repo.setFeeling(value, for: activity.id) },
-                            onSkip: { repo.skipCheckIn($0.id) },
-                            onOpenExperiment: { experimentRoute = $0.id }
-                        )
-                        .padding(.horizontal)
                     }
                     .padding(.bottom, 24)
                 }
+                .scrollBounceBehavior(.basedOnSize)
             }
             .toolbar(.hidden, for: .navigationBar)
-            .navigationDestination(item: $experimentRoute) { id in ExperimentDetailView(experimentID: id) }
-            .sheet(isPresented: $showLog) { LogActivitySheet(existing: nil) }
+            .navigationDestination(for: RingRoute.self) { route in AreaGoalDetailView(areaID: route.id) }
+            .navigationDestination(for: AreaRoute.self) { route in AreaDetailView(areaID: route.id) }
+            .sheet(item: $logRequest) { request in LogActivitySheet(existing: nil, presetAreaID: request.areaID) }
             .sheet(item: $evidenceTarget) { discovery in EvidenceSheet(discoveryID: discovery.id) }
             .animation(.easeInOut(duration: 0.35), value: night)
         }
+    }
+
+    // MARK: - Interaction
+
+    private func tapBrain(repo: LocalRepository, mood: BrainMood) {
+        hasTappedBrain = true
+        let lines = BrainTalk.lines(repo: repo, mood: mood)
+        guard !lines.isEmpty else { return }
+        let next = lines[lineIndex % lines.count]
+        lineIndex += 1
+        poke += 1
+        withAnimation(.snappy) { line = next }
+        reaction = ActiveReaction(kind: next.reaction, start: .now)
+
+        let shown = lineIndex
+        Task {
+            try? await Task.sleep(for: .seconds(4.5))
+            if shown == lineIndex { withAnimation(.snappy) { line = nil } }
+        }
+    }
+
+    // MARK: - Pieces
+
+    @ViewBuilder
+    private func bubble(text: String, ringID: String?) -> some View {
+        if let ringID {
+            NavigationLink(value: RingRoute(id: ringID)) {
+                SpeechBubble(text: text, showsChevron: true)
+            }
+            .buttonStyle(.plain)
+        } else {
+            SpeechBubble(text: text, showsChevron: false)
+        }
+    }
+
+    /// Shown only until the first tap; keeps the same height afterwards so nothing jumps.
+    private func tapHint(ink: Color) -> some View {
+        Label("Tap me", systemImage: "hand.tap.fill")
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(ink.opacity(0.55))
+            .symbolEffect(.pulse)
+            .opacity(hasTappedBrain ? 0 : 1)
+            .frame(height: 22)
+            .accessibilityHidden(hasTappedBrain)
     }
 
     private func header(repo: LocalRepository, ink: Color) -> some View {
@@ -86,7 +145,7 @@ struct HomeView: View {
                 .background(Color.white, in: Capsule())
                 .accessibilityLabel("Day \(repo.daysTogether()) together")
             Button {
-                showLog = true
+                logRequest = LogRequest(areaID: nil)
             } label: {
                 Image(systemName: "plus")
                     .font(.headline)
@@ -94,41 +153,53 @@ struct HomeView: View {
                     .frame(width: 34, height: 34)
                     .background(ink == .white ? Color.white : Theme.ink, in: Circle())
             }
-            .accessibilityLabel("Add something your phone can't detect")
+            .accessibilityLabel("Add a moment")
         }
         .padding(.horizontal)
         .padding(.top, 8)
     }
 }
 
-/// Today's moments as small chips. Tapping one shows the brain in that moment.
-struct TodayStrip: View {
-    let moments: [TodayMoment]
-    @Binding var selected: UUID?
-    var night: Bool
+private extension HomeCard {
+    /// Quiet states say nothing: the brain already shows it.
+    var isShown: Bool {
+        switch self {
+        case .gettingToKnowYou, .allQuiet, .experiment: return false
+        default: return true
+        }
+    }
+}
+
+/// Rounded bubble with a tail pointing at the brain. Text cross-fades when it changes.
+struct SpeechBubble: View {
+    let text: String
+    var showsChevron = false
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(moments) { moment in
-                    let isSelected = selected == moment.id
-                    Button {
-                        withAnimation(.snappy) { selected = isSelected ? nil : moment.id }
-                    } label: {
-                        Label(moment.shortValue, systemImage: moment.symbol)
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(Theme.ink)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(Color.white.opacity(night && !isSelected ? 0.85 : 1), in: Capsule())
-                            .overlay(Capsule().strokeBorder(isSelected ? Theme.pinkDeep : .clear, lineWidth: 2))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("\(moment.activity.title), \(moment.shortValue)")
-                    .accessibilityAddTraits(isSelected ? .isSelected : [])
+        VStack(spacing: -1) {
+            HStack(spacing: 6) {
+                Text(text)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.ink)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(3)
+                    .contentTransition(.opacity)
+                if showsChevron {
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(Theme.pinkDeep)
                 }
             }
-            .padding(.horizontal)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            Image(systemName: "arrowtriangle.down.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(Color.white)
         }
+        .padding(.horizontal, 32)
+        .shadow(color: Theme.ink.opacity(0.08), radius: 8, y: 3)
+        .id(text)
+        .transition(.scale(scale: 0.85).combined(with: .opacity))
     }
 }

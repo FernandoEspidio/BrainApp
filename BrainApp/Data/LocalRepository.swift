@@ -198,6 +198,23 @@ final class LocalRepository {
         mutate(refresh: false) { $0.friends.removeAll { $0.id == id } }
     }
 
+    // MARK: - Ring goals
+
+    func setGoal(_ goal: AreaGoal, for areaID: String) {
+        mutate(refresh: false) { $0.goals[areaID] = goal }
+    }
+
+    /// Records that a ring completion was celebrated, so it doesn't fire again.
+    func markCelebrated(_ ring: RingProgress) {
+        mutate(refresh: false) { $0.celebratedRings.insert(ring.celebrationKey) }
+    }
+
+    // MARK: - Brain animoji
+
+    func setAnimoji(_ frames: [FacePose]) {
+        mutate(refresh: false) { $0.animoji = Array(frames.prefix(AnimojiClip.maxFrames)) }
+    }
+
     // MARK: - Erase
 
     func eraseAll() {
