@@ -130,6 +130,7 @@ struct AreaListContent: View {
 
 struct MapLegendSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(Lab.parkedFeaturesKey) private var showsParked = false
 
     var body: some View {
         NavigationStack {
@@ -137,12 +138,16 @@ struct MapLegendSheet: View {
                 Section("What each element means") {
                     Label("Each circle is an area, always with an icon and a name.", systemImage: "circle")
                     Label("Size: number of entries in the last 14 days (stops growing after 20).", systemImage: "arrow.up.left.and.arrow.down.right")
-                    Label("Bold outline: you marked the area as Important or Very important.", systemImage: "circle.circle")
+                    if showsParked {
+                        Label("Bold outline: you marked the area as Important or Very important.", systemImage: "circle.circle")
+                    }
                     Label("Thin gray lines: they only link each area to you; they mean nothing else.", systemImage: "line.diagonal")
                     Label("Dashed colored line: an association observed in your entries. It appears when you select an area. It is not a proven cause.", systemImage: "link")
                 }
-                Section("Balance") {
-                    Text("There is no universal balance score. The map compares what you log with the priorities you choose; areas don't need to be the same size.")
+                if showsParked {
+                    Section("Balance") {
+                        Text("There is no universal balance score. The map compares what you log with the priorities you choose; areas don't need to be the same size.")
+                    }
                 }
             }
             .navigationTitle("How to read the map")

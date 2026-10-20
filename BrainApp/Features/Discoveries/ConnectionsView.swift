@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// "You": what your buddy has learned (max 3 bubbles), your week at a glance, and a few doors.
-struct YouView: View {
+/// "Connections": what your buddy has learned (max 3 bubbles), your week at a glance, and a few doors.
+struct ConnectionsView: View {
     @Environment(AppModel.self) private var model
+    @AppStorage(Lab.parkedFeaturesKey) private var showsParked = false
     @State private var selected: Discovery?
     @State private var showShare = false
 
@@ -48,14 +49,16 @@ struct YouView: View {
                         NavigationLink { ExperimentsView() } label: {
                             Tile(title: "Experiments", symbol: "flask", tint: Theme.Tint.butter)
                         }
-                        NavigationLink { NearbyFriendsView() } label: {
-                            Tile(title: "Nearby friends", symbol: "person.2.wave.2", tint: Theme.Tint.rose)
-                        }
-                        NavigationLink { Brain3DPreviewView() } label: {
-                            Tile(title: "3D buddy (preview)", symbol: "cube.transparent", tint: Theme.Tint.lilac)
-                        }
-                        NavigationLink { FacePuppetView() } label: {
-                            Tile(title: "Brain animoji (test)", symbol: "face.smiling", tint: Theme.Tint.mint)
+                        if showsParked {
+                            NavigationLink { NearbyFriendsView() } label: {
+                                Tile(title: "Nearby friends", symbol: "person.2.wave.2", tint: Theme.Tint.rose)
+                            }
+                            NavigationLink { Brain3DPreviewView() } label: {
+                                Tile(title: "3D buddy (preview)", symbol: "cube.transparent", tint: Theme.Tint.lilac)
+                            }
+                            NavigationLink { FacePuppetView() } label: {
+                                Tile(title: "Brain animoji (test)", symbol: "face.smiling", tint: Theme.Tint.mint)
+                            }
                         }
                     }
                     .buttonStyle(.plain)
@@ -63,18 +66,13 @@ struct YouView: View {
                 .padding()
             }
             .background(Theme.cream.ignoresSafeArea())
-            .navigationTitle("You")
+            .navigationTitle("Connections")
             .toolbar {
-                ToolbarItemGroup(placement: .topBarTrailing) {
+                if showsParked {
                     Button {
                         showShare = true
                     } label: {
                         Label("Share card", systemImage: "square.and.arrow.up")
-                    }
-                    NavigationLink {
-                        SettingsView()
-                    } label: {
-                        Label("Settings", systemImage: "gearshape")
                     }
                 }
             }

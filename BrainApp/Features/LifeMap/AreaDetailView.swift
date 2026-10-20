@@ -4,6 +4,7 @@ import SwiftUI
 /// When an area is selected: activities, data sources, trend and relevant relationships.
 struct AreaDetailView: View {
     @Environment(AppModel.self) private var model
+    @AppStorage(Lab.parkedFeaturesKey) private var showsParked = false
     let areaID: String
     @State private var editing: Activity?
     @State private var connectionTarget: MapConnection?
@@ -17,17 +18,19 @@ struct AreaDetailView: View {
         let related = repo.connections(involving: areaID)
 
         List {
-            Section {
-                Picker("Priority for you", selection: Binding(
-                    get: { repo.priority(for: areaID) },
-                    set: { repo.setPriority($0, for: areaID) }
-                )) {
-                    ForEach(Priority.allCases) { priority in
-                        Text(priority.label).tag(priority)
+            if showsParked {
+                Section {
+                    Picker("Priority for you", selection: Binding(
+                        get: { repo.priority(for: areaID) },
+                        set: { repo.setPriority($0, for: areaID) }
+                    )) {
+                        ForEach(Priority.allCases) { priority in
+                            Text(priority.label).tag(priority)
+                        }
                     }
+                } footer: {
+                    Text("The map compares what you log with what you decide matters. There is no ideal ratio.")
                 }
-            } footer: {
-                Text("The map compares what you log with what you decide matters. There is no ideal ratio.")
             }
 
             Section("Trend") {

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Two tabs: Today (the brain) and You (what it has learned).
+/// Two tabs: Today (the brain) and Connections (how what you do affects each other).
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
@@ -13,8 +13,8 @@ struct RootView: View {
                 TabView {
                     HomeView()
                         .tabItem { Label("Today", systemImage: "brain.head.profile") }
-                    YouView()
-                        .tabItem { Label("You", systemImage: "sparkles") }
+                    ConnectionsView()
+                        .tabItem { Label("Connections", systemImage: "point.3.connected.trianglepath.dotted") }
                 }
             }
         }

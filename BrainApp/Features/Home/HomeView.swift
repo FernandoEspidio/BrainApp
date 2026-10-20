@@ -7,6 +7,7 @@ struct HomeView: View {
     @State private var previewMoment: UUID?
     @State private var poke = 0
     @State private var showLog = false
+    @State private var showSettings = false
     @State private var evidenceTarget: Discovery?
     @State private var experimentRoute: UUID?
 
@@ -65,6 +66,7 @@ struct HomeView: View {
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(item: $experimentRoute) { id in ExperimentDetailView(experimentID: id) }
             .sheet(isPresented: $showLog) { LogActivitySheet(existing: nil) }
+            .sheet(isPresented: $showSettings) { NavigationStack { SettingsView() } }
             .sheet(item: $evidenceTarget) { discovery in EvidenceSheet(discoveryID: discovery.id) }
             .animation(.easeInOut(duration: 0.35), value: night)
         }
@@ -73,6 +75,22 @@ struct HomeView: View {
     private func header(repo: LocalRepository, ink: Color) -> some View {
         let name = repo.snapshot.userName
         return HStack(spacing: 10) {
+            // Settings live behind the avatar.
+            Button {
+                showSettings = true
+            } label: {
+                Group {
+                    if let initial = name.first {
+                        Text(String(initial).uppercased()).font(.headline)
+                    } else {
+                        Image(systemName: "person.fill").font(.subheadline)
+                    }
+                }
+                .foregroundStyle(Theme.ink)
+                .frame(width: 34, height: 34)
+                .background(Color.white, in: Circle())
+            }
+            .accessibilityLabel("Settings")
             Text(name.isEmpty ? "Hi there" : "Hi, \(name)")
                 .font(.title2.weight(.bold))
                 .foregroundStyle(ink)

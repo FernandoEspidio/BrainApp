@@ -2,6 +2,8 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage(Lab.parkedFeaturesKey) private var showsParked = false
     @State private var confirmErase = false
 
     var body: some View {
@@ -26,15 +28,17 @@ struct SettingsView: View {
                 } label: {
                     Label("Your companion", systemImage: "brain")
                 }
-                NavigationLink {
-                    PrioritiesView()
-                } label: {
-                    Label("Priorities", systemImage: "slider.horizontal.3")
-                }
-                NavigationLink {
-                    AreasView()
-                } label: {
-                    Label("Areas", systemImage: "circle.hexagongrid")
+                if showsParked {
+                    NavigationLink {
+                        PrioritiesView()
+                    } label: {
+                        Label("Priorities", systemImage: "slider.horizontal.3")
+                    }
+                    NavigationLink {
+                        AreasView()
+                    } label: {
+                        Label("Areas", systemImage: "circle.hexagongrid")
+                    }
                 }
             }
 
@@ -62,10 +66,25 @@ struct SettingsView: View {
                     Text("You're in demo mode: erasing only resets the examples.")
                 }
             }
+
+            #if DEBUG
+            Section {
+                Toggle("Show parked features", isOn: $showsParked)
+            } header: {
+                Text("Lab")
+            } footer: {
+                Text("Nearby friends, 3D buddy, animoji, share card, custom areas and priorities stay hidden while the app focuses on connections. Debug builds only.")
+            }
+            #endif
         }
         .scrollContentBackground(.hidden)
         .background(Theme.cream.ignoresSafeArea())
         .navigationTitle("Settings")
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Done") { dismiss() }
+            }
+        }
         .confirmationDialog("Erase all data?", isPresented: $confirmErase, titleVisibility: .visible) {
             Button("Erase everything", role: .destructive) { repo.eraseAll() }
         } message: {

@@ -192,7 +192,7 @@ struct FeelingPicker: View {
     }
 }
 
-/// Navigation tile used on the You tab.
+/// Navigation tile used on the Connections tab.
 struct Tile: View {
     let title: String
     let symbol: String

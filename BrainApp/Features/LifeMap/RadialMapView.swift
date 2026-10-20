@@ -64,6 +64,7 @@ struct RadialMapView: View {
 }
 
 struct AreaNodeView: View {
+    @AppStorage(Lab.parkedFeaturesKey) private var showsParked = false
     let summary: AreaSummary
     let isSelected: Bool
     let action: () -> Void
@@ -77,7 +78,7 @@ struct AreaNodeView: View {
             VStack(spacing: 4) {
                 ZStack {
                     Circle().fill(summary.area.tint)
-                    if summary.priority.rawValue >= Priority.important.rawValue {
+                    if showsParked && summary.priority.rawValue >= Priority.important.rawValue {
                         Circle().strokeBorder(Theme.ink.opacity(0.45), lineWidth: 2)
                     }
                     Image(systemName: summary.area.symbol)
@@ -101,7 +102,8 @@ struct AreaNodeView: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(summary.area.name): \(countLabel(summary.recentCount, "moment", "moments")) in 14 days. Priority: \(summary.priority.label).")
+        .accessibilityLabel("\(summary.area.name): \(countLabel(summary.recentCount, "moment", "moments")) in 14 days."
+                            + (showsParked ? " Priority: \(summary.priority.label)." : ""))
         .accessibilityHint("Shows its relationships and a link to the detail")
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
