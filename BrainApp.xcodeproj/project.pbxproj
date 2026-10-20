@@ -263,6 +263,8 @@
 		000000000000000111000000 /* Debug configuration for PBXNativeTarget "BrainApp" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				"CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]" = BrainApp/BrainApp.entitlements;
+				"CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]" = BrainApp/BrainApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = Q92SA53V78;
@@ -306,6 +308,8 @@
 		000000000000000112000000 /* Release configuration for PBXNativeTarget "BrainApp" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				"CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]" = BrainApp/BrainApp.entitlements;
+				"CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]" = BrainApp/BrainApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = Q92SA53V78;

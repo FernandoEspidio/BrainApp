@@ -6,5 +6,7 @@
 	<array>
 		<string>_brain-p2p._tcp</string>
 	</array>
+	<key>NSHealthShareUsageDescription</key>
+	<string>BrainApp reads your sleep, workouts, steps, mindful minutes and mood to show how the things you do affect each other. Nothing leaves your iPhone.</string>
 </dict>
 </plist>

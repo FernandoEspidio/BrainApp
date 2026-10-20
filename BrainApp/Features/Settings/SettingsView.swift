@@ -70,6 +70,11 @@ struct SettingsView: View {
             #if DEBUG
             Section {
                 Toggle("Show parked features", isOn: $showsParked)
+                NavigationLink {
+                    HealthProbeView()
+                } label: {
+                    Label("Health probe", systemImage: "heart.text.square")
+                }
             } header: {
                 Text("Lab")
             } footer: {
