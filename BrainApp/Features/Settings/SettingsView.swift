@@ -75,6 +75,13 @@ struct SettingsView: View {
                 } label: {
                     Label("Health probe", systemImage: "heart.text.square")
                 }
+                #if os(iOS)
+                NavigationLink {
+                    ScreenTimeProbeView()
+                } label: {
+                    Label("Screen Time probe", systemImage: "hourglass")
+                }
+                #endif
             } header: {
                 Text("Lab")
             } footer: {
