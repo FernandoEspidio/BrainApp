@@ -1,7 +1,7 @@
 import Foundation
 
-/// SPIKE (Lab): six made-up weeks for someone with an Apple Watch, to judge how hints read before
-/// real Watch data arrives. Planted on purpose: sleep helps studying and energy, steps, workouts and
+/// Six made-up weeks for someone with an Apple Watch: what Today shows in demo mode, and what
+/// Lab → Hints uses to judge how hints read before real Watch data arrives. Planted on purpose: sleep helps studying and energy, steps, workouts and
 /// guitar help how days feel, the library helps studying, a workout adds sleep that night and late
 /// coffee takes some away. Groceries change nothing, to catch hits by luck. The same seed always
 /// gives the same days (`SeededGenerator` is in `DemoData`).

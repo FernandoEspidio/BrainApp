@@ -64,6 +64,8 @@ enum DemoData {
         snapshot.friends = [Friend(card: demoFriendCard(name: "Sam", id: friendID),
                                    receivedAt: now.addingTimeInterval(-3 * 86_400), via: .demo)]
         snapshot.hasCompletedOnboarding = true
+        // Today's hints come from `SampleHealthDays`, which answer the daily question for any goal.
+        snapshot.goal = .focus
         snapshot.simulateSensing = false // Demo data is already complete.
         snapshot.sensingStartDate = start
         return snapshot

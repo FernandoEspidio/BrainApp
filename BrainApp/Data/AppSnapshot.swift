@@ -14,6 +14,16 @@ struct DiscoveryFeedback: Codable, Hashable, Sendable {
     var updatedAt: Date = .now
 }
 
+/// One answer to the goal's daily question. Answers stay with the goal they were given for.
+struct DailyAnswer: Codable, Hashable, Sendable {
+    /// Start of the day the answer is about. For sleep, the morning the night ended.
+    var day: Date
+    var goal: Goal
+    /// From 1 to the number of answers, worst first.
+    var value: Int
+    var answeredAt: Date
+}
+
 struct Friend: Identifiable, Codable, Hashable, Sendable {
     var id: UUID { card.id }
     var card: ShareableBrainCard
@@ -46,13 +56,17 @@ struct AppSnapshot: Codable, Sendable {
     var sensingStartDate: Date?
     /// Detections the user deleted, so the simulator doesn't bring them back.
     var dismissedDetections: Set<UUID> = []
+    /// What the person protects. Nil until they pick one (onboarding, or Today for earlier users).
+    var goal: Goal?
+    var dailyAnswers: [DailyAnswer] = []
+    var remindsDailyQuestion = false
 
     init() {}
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion, activities, customAreas, priorities, experiments, feedback,
              seenDiscoveries, companion, understandingHighWater, friends, localCardID, hasCompletedOnboarding,
-             userName, simulateSensing, sensingStartDate, dismissedDetections
+             userName, simulateSensing, sensingStartDate, dismissedDetections, goal, dailyAnswers, remindsDailyQuestion
     }
 
     /// Tolerant decoding: missing keys take their default value.
@@ -76,5 +90,8 @@ struct AppSnapshot: Codable, Sendable {
         simulateSensing = try c.decodeIfPresent(Bool.self, forKey: .simulateSensing) ?? d.simulateSensing
         sensingStartDate = try c.decodeIfPresent(Date.self, forKey: .sensingStartDate)
         dismissedDetections = try c.decodeIfPresent(Set<UUID>.self, forKey: .dismissedDetections) ?? d.dismissedDetections
+        goal = try c.decodeIfPresent(Goal.self, forKey: .goal)
+        dailyAnswers = try c.decodeIfPresent([DailyAnswer].self, forKey: .dailyAnswers) ?? d.dailyAnswers
+        remindsDailyQuestion = try c.decodeIfPresent(Bool.self, forKey: .remindsDailyQuestion) ?? d.remindsDailyQuestion
     }
 }

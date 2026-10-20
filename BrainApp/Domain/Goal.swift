@@ -50,8 +50,24 @@ enum Goal: String, CaseIterable, Identifiable, Codable, Sendable {
         }
     }
 
+    var symbol: String {
+        switch self {
+        case .feel: return "face.smiling"
+        case .focus: return "book"
+        case .energy: return "bolt"
+        case .sleep: return "moon.zzz"
+        case .exercise: return "figure.run"
+        }
+    }
+
     /// Sleep asks about the night that just ended, so in the morning. The others ask in the evening.
     var asksInMorning: Bool { self == .sleep }
+
+    /// Today shows the question from this hour: about a day that's mostly done, or a night just ended.
+    var questionFromHour: Int { asksInMorning ? 5 : 18 }
+
+    /// The optional daily reminder, at 9 am or 9 pm.
+    var reminderHour: Int { asksInMorning ? 9 : 21 }
 
     /// From this answer up, a day counts as good: "OK" for studying, "Good" for the others.
     var goodAnswer: Double { self == .focus ? 3 : 4 }

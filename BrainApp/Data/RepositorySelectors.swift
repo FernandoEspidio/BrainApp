@@ -95,6 +95,29 @@ extension LocalRepository {
         return value
     }
 
+    // MARK: - Goal and hints
+
+    func dailyAnswer(for goal: Goal, on day: Date) -> Int? {
+        snapshot.dailyAnswers.first { $0.goal == goal && $0.day == day }?.value
+    }
+
+    /// What `HintEngine` reads: one row per day for the last `daysBack` days, with Health's numbers when
+    /// there are any, the answers to this goal's question and the activities logged by hand.
+    func hintDays(health: [HealthDay], goal: Goal, daysBack: Int = 60, now: Date = .now,
+                  calendar: Calendar = .current) -> [HealthDay] {
+        let today = calendar.startOfDay(for: now)
+        let healthByDate = Dictionary(health.map { ($0.date, $0) }, uniquingKeysWith: { first, _ in first })
+        let answers = Dictionary(snapshot.dailyAnswers.filter { $0.goal == goal }.map { ($0.day, Double($0.value)) },
+                                 uniquingKeysWith: { _, latest in latest })
+        let days = (0...daysBack).reversed().compactMap { offset -> HealthDay? in
+            guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else { return nil }
+            var day = healthByDate[date] ?? HealthDay(date: date)
+            day.answer = answers[date]
+            return day
+        }
+        return HealthConnections.addingActivities(snapshot.activities, to: days, calendar: calendar)
+    }
+
     // MARK: - Home
 
     /// Moments that ended today (sleep counts for the day it ends), oldest first.

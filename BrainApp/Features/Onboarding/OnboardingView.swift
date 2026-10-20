@@ -1,12 +1,12 @@
 import SwiftUI
 
-/// First run in three calm steps: meet your buddy → your phone does the logging → let's go.
-/// No real permissions yet: sensing is simulated in this prototype.
+/// First run in three calm steps: meet your buddy → pick what you protect → let's go.
+/// Health access is asked on Today, once there's a goal to read it for.
 struct OnboardingView: View {
     @Environment(AppModel.self) private var model
     @State private var step = 0
     @State private var name = ""
-    @State private var simulateSensing = true
+    @State private var goal: Goal?
     @State private var poke = 0
 
     var body: some View {
@@ -26,7 +26,7 @@ struct OnboardingView: View {
                 Spacer(minLength: 0)
 
                 BrainAvatarView(appearance: repo.snapshot.companion, stage: 0,
-                                mood: [BrainMood.idle, .resting, .celebrating][step], size: 260, poke: poke)
+                                mood: [BrainMood.idle, .resting, .celebrating][step], size: step == 1 ? 140 : 260, poke: poke)
                     .onTapGesture { poke += 1 }
 
                 VStack(spacing: 10) {
@@ -44,23 +44,16 @@ struct OnboardingView: View {
                         .padding(.horizontal, 40)
                         .submitLabel(.next)
                 } else if step == 1 {
-                    VStack(spacing: 10) {
-                        sensingRow("moon.zzz.fill", "Sleep", Theme.Tint.lilac)
-                        sensingRow("figure.walk", "Walks and workouts", Theme.Tint.mint)
-                        sensingRow("book.fill", "Reading and focus time", Theme.Tint.sky)
-                        Toggle("Simulate it for now", isOn: $simulateSensing)
-                            .font(.subheadline.weight(.semibold))
-                            .tint(Theme.pinkDeep)
-                            .padding(.top, 4)
-                    }
-                    .cardStyle()
-                    .padding(.horizontal)
+                    GoalPicker(selected: goal) { goal = $0 }
+                        .padding(.horizontal)
                 }
 
                 Spacer(minLength: 0)
 
                 Button(step < 2 ? "Continue" : "Let's go") { advance(repo) }
                     .buttonStyle(InkButtonStyle())
+                    .disabled(step == 1 && goal == nil)
+                    .opacity(step == 1 && goal == nil ? 0.4 : 1)
                     .padding(.horizontal)
 
                 if step == 0 {
@@ -77,7 +70,7 @@ struct OnboardingView: View {
     private var title: String {
         switch step {
         case 0: return "Hi! I'm your brain buddy."
-        case 1: return "Your phone does the logging"
+        case 1: return "What are you protecting?"
         default: return "I'll learn as we go"
         }
     }
@@ -85,26 +78,23 @@ struct OnboardingView: View {
     private var subtitle: String {
         switch step {
         case 0: return "I show what you're discovering about yourself. I don't measure your brain, and I never get sad if you rest."
-        case 1: return "Moments are noticed automatically. You only add what the phone can't see."
-        default: return "Patterns show up after a few days, always with the evidence behind them."
-        }
-    }
-
-    private func sensingRow(_ symbol: String, _ text: String, _ tint: Color) -> some View {
-        HStack(spacing: 12) {
-            TintedIcon(symbol: symbol, tint: tint, size: 34)
-            Text(text).font(.subheadline.weight(.medium)).foregroundStyle(Theme.ink)
-            Spacer()
-            Image(systemName: "checkmark").foregroundStyle(Theme.inkSoft)
+        case 1: return "Pick one. I'll find what comes with it. You can change it any time."
+        default:
+            let finding = "what comes with \(goal?.change(better: true) ?? "it")"
+            return goal?.question == nil
+                ? "Log what you do with +. Health counts the rest, and I'll tell you \(finding)."
+                : "Log what you do with +, and answer one question a day. In about a week I'll tell you \(finding)."
         }
     }
 
     private func advance(_ repo: LocalRepository) {
         if step == 0 { repo.setUserName(name) }
+        if step == 1, let goal { repo.setGoal(goal) }
         if step < 2 {
             step += 1
         } else {
-            repo.completeOnboarding(simulateSensing: simulateSensing)
+            // Simulated moments would mix with real ones; they can still be turned on in Settings.
+            repo.completeOnboarding(simulateSensing: false)
         }
     }
 }

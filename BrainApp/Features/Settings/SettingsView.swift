@@ -18,6 +18,32 @@ struct SettingsView: View {
                 Text("Shows fictional examples that live only in memory. Your real entries are not read, modified or mixed in.")
             }
 
+            Section {
+                Picker(selection: Binding(
+                    get: { repo.snapshot.goal ?? .feel },
+                    set: { goal in
+                        repo.setGoal(goal)
+                        Task { await Reminders.syncDailyQuestion(goal: goal, enabled: repo.snapshot.remindsDailyQuestion) }
+                    }
+                )) {
+                    ForEach(Goal.allCases) { Label($0.label, systemImage: $0.symbol).tag($0) }
+                } label: {
+                    Text("Goal")
+                }
+                Toggle("Daily question reminder", isOn: Binding(
+                    get: { repo.snapshot.remindsDailyQuestion },
+                    set: { enabled in
+                        repo.setRemindsDailyQuestion(enabled)
+                        Task { await Reminders.syncDailyQuestion(goal: repo.snapshot.goal, enabled: enabled) }
+                    }
+                ))
+                .disabled(repo.isDemo || repo.snapshot.goal?.question == nil)
+            } header: {
+                Text("What you protect")
+            } footer: {
+                Text("Answers stay with the goal they were given for, so switching back keeps them. The reminder comes at 9 pm, or 9 am for sleep.")
+            }
+
             Section("Personalization") {
                 TextField("Your name", text: Binding(
                     get: { repo.snapshot.userName },

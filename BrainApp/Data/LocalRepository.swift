@@ -110,6 +110,25 @@ final class LocalRepository {
         skippedCheckIns.insert(activityID)
     }
 
+    // MARK: - Goal and daily question
+
+    func setGoal(_ goal: Goal) {
+        guard goal != snapshot.goal else { return }
+        mutate(refresh: false) { $0.goal = goal }
+    }
+
+    /// One answer per goal and day: answering again replaces it.
+    func answerDailyQuestion(_ value: Int, goal: Goal, day: Date) {
+        mutate(refresh: false) { s in
+            s.dailyAnswers.removeAll { $0.goal == goal && $0.day == day }
+            s.dailyAnswers.append(DailyAnswer(day: day, goal: goal, value: value, answeredAt: .now))
+        }
+    }
+
+    func setRemindsDailyQuestion(_ enabled: Bool) {
+        mutate(refresh: false) { $0.remindsDailyQuestion = enabled }
+    }
+
     // MARK: - Areas and priorities
 
     func setPriority(_ priority: Priority, for areaID: String) {
