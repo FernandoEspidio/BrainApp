@@ -15,6 +15,8 @@ struct HealthDay: Identifiable, Sendable {
     var valence: Double?
     /// Average "How did it feel?" answer in BrainApp that day, 1 to 5. Not from Health.
     var feeling: Double?
+    /// Answer to the goal's daily question, from 1 to the number of answers (see `Goal`). Not from Health.
+    var answer: Double?
 }
 
 /// SPIKE: connections built from Health history alone, so they can appear on day 1 without any ratings.
@@ -27,8 +29,9 @@ enum HealthConnections {
     static let minimumEffectSize = 0.4
 
     enum Metric: String, Sendable {
-        case sleep, steps, exercise, workout, mindful, mood, feeling
+        case sleep, steps, exercise, workout, mindful, mood, feeling, answer
 
+        /// The rows of "Data found". `answer` is left out: it belongs to a goal (see `HintEngine`).
         static let all: [Metric] = [.sleep, .steps, .exercise, .workout, .mindful, .mood, .feeling]
 
         func value(_ day: HealthDay) -> Double? {
@@ -40,11 +43,12 @@ enum HealthConnections {
             case .mindful: return Double(day.mindfulMinutes)
             case .mood: return day.valence
             case .feeling: return day.feeling
+            case .answer: return day.answer
             }
         }
 
         /// Scores have no meaningful percentage change.
-        var isScore: Bool { self == .mood || self == .feeling }
+        var isScore: Bool { self == .mood || self == .feeling || self == .answer }
 
         /// Yes/no metrics split into "with" and "without"; the others split at your own median.
         var isYesNo: Bool { self == .workout || self == .mindful }
@@ -58,6 +62,7 @@ enum HealthConnections {
             case .mindful: return "Mindful minutes"
             case .mood: return "Mood (State of Mind)"
             case .feeling: return "Check-ins (BrainApp)"
+            case .answer: return "Daily answers (BrainApp)"
             }
         }
 
@@ -79,6 +84,16 @@ enum HealthConnections {
             case .exercise, .workout, .mindful: return "\(Int(value.rounded())) min"
             case .mood: return value.formatted(.number.precision(.fractionLength(2)))
             case .feeling: return "\(value.formatted(.number.precision(.fractionLength(1)))) of 5"
+            case .answer: return value.formatted(.number.precision(.fractionLength(1)))
+            }
+        }
+
+        /// Where to split days: the median rounded to a number a person would say ("over 8,200 steps").
+        func roundedSplit(_ median: Double) -> Double {
+            switch self {
+            case .steps: return (median / 100).rounded() * 100
+            case .sleep: return (median / 5).rounded() * 5
+            default: return median.rounded()
             }
         }
     }
@@ -110,6 +125,8 @@ enum HealthConnections {
         let label: String
         let days: Int
         let mean: Double
+        /// The effect on each day of the group.
+        let values: [Double]
     }
 
     enum Verdict: Sendable {
@@ -119,6 +136,8 @@ enum HealthConnections {
     struct Result: Identifiable, Sendable {
         var id: String { rule.id }
         let rule: Rule
+        /// The cause value days are split at: 0 for yes/no causes.
+        let split: Double
         /// Days with more of the cause (over the median, or "with").
         let high: Group
         let low: Group
@@ -139,7 +158,8 @@ enum HealthConnections {
     }
 
     /// Today is left out: its steps and exercise aren't finished yet.
-    static func evaluate(_ days: [HealthDay], now: Date = .now, calendar: Calendar = .current) -> [Result] {
+    static func evaluate(_ days: [HealthDay], rules: [Rule] = HealthConnections.rules,
+                         now: Date = .now, calendar: Calendar = .current) -> [Result] {
         let today = calendar.startOfDay(for: now)
         let past = days.filter { $0.date < today }
         let byDate = Dictionary(uniqueKeysWithValues: past.map { ($0.date, $0) })
@@ -154,7 +174,7 @@ enum HealthConnections {
                 return (cause, effect)
             }
 
-            let split = rule.cause.isYesNo ? 0 : median(pairs.map(\.cause))
+            let split = rule.cause.isYesNo ? 0 : rule.cause.roundedSplit(median(pairs.map(\.cause)))
             let high = pairs.filter { $0.cause > split }.map(\.effect)
             let low = pairs.filter { $0.cause <= split }.map(\.effect)
             let highLabel = rule.cause.isYesNo ? "Days with \(rule.cause.noun)" : "Over \(rule.cause.format(split))"
@@ -167,9 +187,9 @@ enum HealthConnections {
             } else {
                 verdict = abs(d) >= minimumEffectSize ? .connection : .tooWeak
             }
-            return Result(rule: rule,
-                          high: Group(label: highLabel, days: high.count, mean: mean(high)),
-                          low: Group(label: lowLabel, days: low.count, mean: mean(low)),
+            return Result(rule: rule, split: split,
+                          high: Group(label: highLabel, days: high.count, mean: mean(high), values: high),
+                          low: Group(label: lowLabel, days: low.count, mean: mean(low), values: low),
                           effectSize: d, verdict: verdict)
         }
     }

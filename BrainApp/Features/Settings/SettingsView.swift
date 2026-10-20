@@ -75,6 +75,11 @@ struct SettingsView: View {
                 } label: {
                     Label("Health probe", systemImage: "heart.text.square")
                 }
+                NavigationLink {
+                    HintProbeView()
+                } label: {
+                    Label("Hints", systemImage: "text.bubble")
+                }
                 #if os(iOS)
                 NavigationLink {
                     ScreenTimeProbeView()
