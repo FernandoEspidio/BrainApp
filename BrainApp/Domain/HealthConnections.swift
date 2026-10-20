@@ -17,6 +17,8 @@ struct HealthDay: Identifiable, Sendable {
     var feeling: Double?
     /// Answer to the goal's daily question, from 1 to the number of answers (see `Goal`). Not from Health.
     var answer: Double?
+    /// Names of the activities logged by hand that day (see `HealthConnections.addingActivities`). Not from Health.
+    var activities: Set<String> = []
 }
 
 /// SPIKE: connections built from Health history alone, so they can appear on day 1 without any ratings.
@@ -28,11 +30,28 @@ enum HealthConnections {
     /// Standardized difference (Cohen's d) before calling it a connection. 0.2 is small, 0.5 medium.
     static let minimumEffectSize = 0.4
 
-    enum Metric: String, Sendable {
+    enum Metric: Hashable, Sendable {
         case sleep, steps, exercise, workout, mindful, mood, feeling, answer
+        /// An activity logged by hand, by name: done that day or not.
+        case activity(String)
 
-        /// The rows of "Data found". `answer` is left out: it belongs to a goal (see `HintEngine`).
+        /// The rows of "Data found". `answer` and activities are left out: they belong to `HintEngine`.
         static let all: [Metric] = [.sleep, .steps, .exercise, .workout, .mindful, .mood, .feeling]
+
+        /// Stable, for rule IDs: "steps", "activity.Play guitar".
+        var id: String {
+            switch self {
+            case .sleep: return "sleep"
+            case .steps: return "steps"
+            case .exercise: return "exercise"
+            case .workout: return "workout"
+            case .mindful: return "mindful"
+            case .mood: return "mood"
+            case .feeling: return "feeling"
+            case .answer: return "answer"
+            case .activity(let name): return "activity.\(name)"
+            }
+        }
 
         func value(_ day: HealthDay) -> Double? {
             switch self {
@@ -44,6 +63,7 @@ enum HealthConnections {
             case .mood: return day.valence
             case .feeling: return day.feeling
             case .answer: return day.answer
+            case .activity(let name): return day.activities.contains(name) ? 1 : 0
             }
         }
 
@@ -51,7 +71,12 @@ enum HealthConnections {
         var isScore: Bool { self == .mood || self == .feeling || self == .answer }
 
         /// Yes/no metrics split into "with" and "without"; the others split at your own median.
-        var isYesNo: Bool { self == .workout || self == .mindful }
+        var isYesNo: Bool {
+            switch self {
+            case .workout, .mindful, .activity: return true
+            default: return false
+            }
+        }
 
         var label: String {
             switch self {
@@ -63,6 +88,7 @@ enum HealthConnections {
             case .mood: return "Mood (State of Mind)"
             case .feeling: return "Check-ins (BrainApp)"
             case .answer: return "Daily answers (BrainApp)"
+            case .activity(let name): return "“\(name)”"
             }
         }
 
@@ -71,6 +97,7 @@ enum HealthConnections {
             switch self {
             case .workout: return "a workout"
             case .mindful: return "mindful minutes"
+            case .activity: return label
             default: return label.lowercased()
             }
         }
@@ -85,6 +112,7 @@ enum HealthConnections {
             case .mood: return value.formatted(.number.precision(.fractionLength(2)))
             case .feeling: return "\(value.formatted(.number.precision(.fractionLength(1)))) of 5"
             case .answer: return value.formatted(.number.precision(.fractionLength(1)))
+            case .activity: return value > 0 ? "done" : "not done"
             }
         }
 
@@ -209,6 +237,26 @@ enum HealthConnections {
             if let ratings = rated[day.date]?.compactMap(\.enjoyment), !ratings.isEmpty {
                 day.feeling = Double(ratings.reduce(0, +)) / Double(ratings.count)
             }
+            return day
+        }
+    }
+
+    /// Adds the activities logged by hand: the things you do, which Health doesn't see.
+    /// Simulated and detected moments are left out. Names match ignoring case and spaces,
+    /// and keep the first spelling logged.
+    static func addingActivities(_ activities: [Activity], to days: [HealthDay], calendar: Calendar = .current) -> [HealthDay] {
+        var names: [String: String] = [:]
+        var logged: [Date: Set<String>] = [:]
+        for activity in activities.filter({ $0.source == .manual }).sorted(by: { $0.date < $1.date }) {
+            let title = activity.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !title.isEmpty else { continue }
+            let name = names[title.lowercased(), default: title]
+            names[title.lowercased()] = name
+            logged[calendar.startOfDay(for: activity.date), default: []].insert(name)
+        }
+        return days.map { day in
+            var day = day
+            day.activities = logged[day.date] ?? []
             return day
         }
     }

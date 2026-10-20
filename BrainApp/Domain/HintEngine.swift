@@ -25,7 +25,8 @@ struct Hint: Identifiable, Sendable {
     let sentence: String
     /// "5 of 6 good study days vs 2 of 7".
     let number: String
-    /// What protects the goal, when the better side is something you can do today. Nil otherwise.
+    /// What protects the goal, when the better side is something you can do today. Nil otherwise, and
+    /// always nil for a hunch: on test data many are luck ("Make time for groceries"), so they get tested, not acted on.
     let action: String?
     /// The comparison behind it, for "Why?".
     let result: HealthConnections.Result
@@ -63,16 +64,18 @@ enum HintState: Sendable {
 enum HintEngine {
     /// Days with both numbers before a hunch is possible: three per group.
     static let daysForFirstHint = 6
+    /// Each comparison is another chance of a hit by luck, so only the most frequent activities are compared.
+    static let maxActivities = 5
 
     static func state(for goal: Goal, days: [HealthDay], now: Date = .now, calendar: Calendar = .current) -> HintState {
         let outcome = outcome(for: goal, days: days)
         // A cause with no data at all can't be compared, and leaving it out keeps chance hits down.
-        let available = causes(for: goal, outcome: outcome).filter { cause in days.contains { (cause.value($0) ?? 0) > 0 } }
+        let available = causes(for: goal, outcome: outcome, days: days).filter { cause in days.contains { (cause.value($0) ?? 0) > 0 } }
         guard !available.isEmpty else { return .needsSignal }
 
         // For sleep, the cause is the day before the night (a night counts for the morning it ends).
         let rules = available.map { cause in
-            HealthConnections.Rule(id: "\(goal.rawValue).\(cause.rawValue)", title: "\(cause.label) → \(goal.label)",
+            HealthConnections.Rule(id: "\(goal.rawValue).\(cause.id)", title: "\(cause.label) → \(goal.label)",
                                    cause: cause, effect: outcome, effectNextDay: goal == .sleep)
         }
         let results = HealthConnections.evaluate(days, rules: rules, now: now, calendar: calendar)
@@ -114,12 +117,22 @@ enum HintEngine {
 
     // MARK: - Sentences
 
+    /// Health's numbers, then the activities logged on at least 3 days, most frequent first.
     /// Steps and exercise minutes measure the same movement, and a workout is exercise: neither explains the other.
-    private static func causes(for goal: Goal, outcome: HealthConnections.Metric) -> [HealthConnections.Metric] {
+    private static func causes(for goal: Goal, outcome: HealthConnections.Metric, days: [HealthDay]) -> [HealthConnections.Metric] {
         var causes: [HealthConnections.Metric] = [.sleep, .steps, .exercise, .workout, .mindful]
         if goal == .sleep { causes.removeAll { $0 == .sleep } }
         if outcome == .steps || outcome == .exercise { causes.removeAll { [.steps, .exercise, .workout].contains($0) } }
-        return causes
+
+        var counts: [String: Int] = [:]
+        for day in days {
+            for name in day.activities { counts[name, default: 0] += 1 }
+        }
+        let activities = counts.filter { $0.value >= 3 }
+            .sorted { ($0.value, $1.key) > ($1.value, $0.key) }
+            .prefix(maxActivities)
+            .map { HealthConnections.Metric.activity($0.key) }
+        return causes + activities
     }
 
     private static func hint(from result: HealthConnections.Result, goal: Goal) -> Hint? {
@@ -129,16 +142,15 @@ enum HintEngine {
         var sentence = "\(causePhrase(result)) came with \(effectPhrase(result, goal: goal, better: better))"
         if result.rule.effectNextDay { sentence += " that night" }
         return Hint(strength: strength, sentence: sentence + ".", number: number(result, goal: goal),
-                    action: better ? action(for: result.rule.cause) : nil, result: result)
+                    action: better && strength >= .pattern ? action(for: result.rule.cause) : nil, result: result)
     }
 
-    /// "Nights over 7h 10m", "Days over 8,200 steps", "Days with a workout".
+    /// "Nights over 7h 10m", "Days over 8,200 steps", "Days with a workout", "Days with “Play guitar”".
     private static func causePhrase(_ result: HealthConnections.Result) -> String {
         let cause = result.rule.cause
         switch cause {
         case .sleep: return "Nights over \(cause.format(result.split))"
-        case .workout: return "Days with a workout"
-        case .mindful: return "Days with mindful minutes"
+        case .workout, .mindful, .activity: return "Days with \(cause.noun)"
         case .exercise: return "Days over \(Int(result.split)) exercise minutes"
         default: return "Days over \(cause.format(result.split))"
         }
@@ -182,6 +194,7 @@ enum HintEngine {
         case .exercise: return "Plan 20 active minutes today"
         case .workout: return "Plan a workout"
         case .mindful: return "Take 5 mindful minutes"
+        case .activity(let name): return "Make time for “\(name)” today"
         default: return nil
         }
     }

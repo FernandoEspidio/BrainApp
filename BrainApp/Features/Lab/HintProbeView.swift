@@ -47,8 +47,8 @@ struct HintProbeView: View {
                 }
             } footer: {
                 Text(data == .sample
-                     ? "Six made-up weeks with sleep, workouts and an answer to the daily question every day. Some connections are planted on purpose."
-                     : "Your last \(Self.daysBack) days of Health. Until the daily question exists, “\(Goal.feel.label)” uses your check-ins on moments and the other goals have no answers.")
+                     ? "Six made-up weeks with sleep, workouts, a few logged activities and an answer to the daily question every day. Some connections are planted on purpose."
+                     : "Your last \(Self.daysBack) days of Health, plus the activities you logged by hand (simulated ones are left out). Until the daily question exists, “\(Goal.feel.label)” uses your check-ins on moments and the other goals have no answers.")
             }
 
             if let days = days(for: goal) {
@@ -106,8 +106,9 @@ struct HintProbeView: View {
             let calendar = Calendar.current
             let start = calendar.date(byAdding: .day, value: -Self.daysBack, to: calendar.startOfDay(for: .now)) ?? .now
             // Demo mode: fictional check-ins are never mixed with real Health data.
-            let checkIns = model.isDemoMode ? [] : model.repository.snapshot.activities
-            myDays = HealthConnections.addingCheckIns(checkIns, to: try await source.dailySummaries(since: start))
+            let logged = model.isDemoMode ? [] : model.repository.snapshot.activities
+            let days = try await source.dailySummaries(since: start)
+            myDays = HealthConnections.addingActivities(logged, to: HealthConnections.addingCheckIns(logged, to: days))
             message = nil
         } catch {
             message = error.localizedDescription
