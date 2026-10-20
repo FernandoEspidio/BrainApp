@@ -64,6 +64,7 @@ final class HealthKitDataSource: DeviceDataSource {
         // The first night starts the evening before.
         for night in try await sleepNights(since: first.addingTimeInterval(-Self.nightShift)) {
             days[night.day]?.sleepMinutes = night.asleepMinutes
+            days[night.day]?.sleepIsTimeInBed = night.isTimeInBed
         }
         for statistics in try await dailySums(.stepCount, since: first) {
             days[statistics.startDate]?.steps = statistics.sumQuantity().map { Int($0.doubleValue(for: .count())) }
@@ -94,6 +95,8 @@ final class HealthKitDataSource: DeviceDataSource {
         let day: Date
         let start: Date
         let asleepMinutes: Int
+        /// No asleep data that night, only time in bed: an overestimate of sleep.
+        let isTimeInBed: Bool
     }
 
     /// Asleep time ending between 6 pm and 6 pm counts for the second day's night.
@@ -101,16 +104,21 @@ final class HealthKitDataSource: DeviceDataSource {
 
     /// Watch, iPhone and other apps often record the same night, and the Watch splits it into
     /// stages, so overlapping intervals are merged before they are added up.
+    /// Without a Watch, iOS only records time in bed (from the Sleep Schedule); it is used when nothing else exists.
     func sleepNights(since start: Date) async throws -> [SleepNight] {
         let asleep = Set(HKCategoryValueSleepAnalysis.allAsleepValues.map(\.rawValue))
+        let inBed = HKCategoryValueSleepAnalysis.inBed.rawValue
         let segments = try await samples(.categorySample(type: HKCategoryType(.sleepAnalysis), predicate: datePredicate(since: start)))
-            .filter { asleep.contains($0.value) }
+            .filter { asleep.contains($0.value) || $0.value == inBed }
         let byNight = Dictionary(grouping: segments) { calendar.startOfDay(for: $0.endDate.addingTimeInterval(Self.nightShift)) }
         return byNight.compactMap { day, segments -> SleepNight? in
-            let merged = Self.merge(segments.map { DateInterval(start: $0.startDate, end: $0.endDate) })
+            let asleepSegments = segments.filter { asleep.contains($0.value) }
+            let used = asleepSegments.isEmpty ? segments : asleepSegments
+            let merged = Self.merge(used.map { DateInterval(start: $0.startDate, end: $0.endDate) })
             guard let first = merged.first else { return nil }
             let minutes = merged.reduce(0) { $0 + $1.duration } / 60
-            return SleepNight(id: Self.stableID(night: day), day: day, start: first.start, asleepMinutes: Int(minutes))
+            return SleepNight(id: Self.stableID(night: day), day: day, start: first.start, asleepMinutes: Int(minutes),
+                              isTimeInBed: asleepSegments.isEmpty)
         }
         .sorted { $0.day < $1.day }
     }

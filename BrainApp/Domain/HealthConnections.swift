@@ -1,16 +1,20 @@
 import Foundation
 
-/// One day of Health numbers. A night counts for the morning it ends.
+/// One day of Health numbers, plus BrainApp's own check-ins. A night counts for the morning it ends.
 struct HealthDay: Identifiable, Sendable {
     var id: Date { date }
     let date: Date
     var sleepMinutes: Int?
+    /// Only time in bed was recorded (no Watch): an overestimate of sleep.
+    var sleepIsTimeInBed = false
     var steps: Int?
     var exerciseMinutes: Int?
     var workoutMinutes = 0
     var mindfulMinutes = 0
     /// Average State of Mind logged that day, from -1 (very unpleasant) to 1 (very pleasant).
     var valence: Double?
+    /// Average "How did it feel?" answer in BrainApp that day, 1 to 5. Not from Health.
+    var feeling: Double?
 }
 
 /// SPIKE: connections built from Health history alone, so they can appear on day 1 without any ratings.
@@ -23,7 +27,9 @@ enum HealthConnections {
     static let minimumEffectSize = 0.4
 
     enum Metric: String, Sendable {
-        case sleep, steps, exercise, workout, mindful, mood
+        case sleep, steps, exercise, workout, mindful, mood, feeling
+
+        static let all: [Metric] = [.sleep, .steps, .exercise, .workout, .mindful, .mood, .feeling]
 
         func value(_ day: HealthDay) -> Double? {
             switch self {
@@ -33,8 +39,12 @@ enum HealthConnections {
             case .workout: return Double(day.workoutMinutes)
             case .mindful: return Double(day.mindfulMinutes)
             case .mood: return day.valence
+            case .feeling: return day.feeling
             }
         }
+
+        /// Scores have no meaningful percentage change.
+        var isScore: Bool { self == .mood || self == .feeling }
 
         /// Yes/no metrics split into "with" and "without"; the others split at your own median.
         var isYesNo: Bool { self == .workout || self == .mindful }
@@ -47,6 +57,7 @@ enum HealthConnections {
             case .workout: return "Workouts"
             case .mindful: return "Mindful minutes"
             case .mood: return "Mood (State of Mind)"
+            case .feeling: return "Check-ins (BrainApp)"
             }
         }
 
@@ -67,6 +78,7 @@ enum HealthConnections {
             case .steps: return "\(Int(value.rounded()).formatted()) steps"
             case .exercise, .workout, .mindful: return "\(Int(value.rounded())) min"
             case .mood: return value.formatted(.number.precision(.fractionLength(2)))
+            case .feeling: return "\(value.formatted(.number.precision(.fractionLength(1)))) of 5"
             }
         }
     }
@@ -87,7 +99,11 @@ enum HealthConnections {
         Rule(id: "workout.sleep", title: "Workout → sleep that night", cause: .workout, effect: .sleep, effectNextDay: true),
         Rule(id: "steps.sleep", title: "Steps → sleep that night", cause: .steps, effect: .sleep, effectNextDay: true),
         Rule(id: "workout.mood", title: "Workout → mood that day", cause: .workout, effect: .mood, effectNextDay: false),
-        Rule(id: "mindful.sleep", title: "Mindful minutes → sleep that night", cause: .mindful, effect: .sleep, effectNextDay: true)
+        Rule(id: "mindful.sleep", title: "Mindful minutes → sleep that night", cause: .mindful, effect: .sleep, effectNextDay: true),
+        Rule(id: "steps.mood", title: "Steps → mood that day", cause: .steps, effect: .mood, effectNextDay: false),
+        // iPhone only: steps and time in bed come free, the check-in is the second signal.
+        Rule(id: "steps.feeling", title: "Steps → how your day felt", cause: .steps, effect: .feeling, effectNextDay: false),
+        Rule(id: "sleep.feeling", title: "Sleep → how your day felt", cause: .sleep, effect: .feeling, effectNextDay: false)
     ]
 
     struct Group: Sendable {
@@ -115,7 +131,7 @@ enum HealthConnections {
             let diff = high.mean - low.mean
             let sign = diff >= 0 ? "+" : "−"
             var text = sign + rule.effect.format(abs(diff))
-            if rule.effect != .mood, low.mean > 0 {
+            if !rule.effect.isScore, low.mean > 0 {
                 text += " (\(sign)\(Int((abs(diff) / low.mean * 100).rounded()))%)"
             }
             return text
@@ -160,8 +176,20 @@ enum HealthConnections {
 
     /// Days that have each kind of data.
     static func coverage(_ days: [HealthDay]) -> [(metric: Metric, days: Int)] {
-        [Metric.sleep, .steps, .exercise, .workout, .mindful, .mood].map { metric in
-            (metric, days.filter { (metric.value($0) ?? 0) > 0 || (metric == .mood && $0.valence != nil) }.count)
+        Metric.all.map { metric in
+            (metric, days.filter { metric.isScore ? metric.value($0) != nil : (metric.value($0) ?? 0) > 0 }.count)
+        }
+    }
+
+    /// Adds BrainApp's "How did it feel?" answers: the second signal for people without a Watch.
+    static func addingCheckIns(_ activities: [Activity], to days: [HealthDay], calendar: Calendar = .current) -> [HealthDay] {
+        let rated = Dictionary(grouping: activities.filter { $0.enjoyment != nil }) { calendar.startOfDay(for: $0.date) }
+        return days.map { day in
+            var day = day
+            if let ratings = rated[day.date]?.compactMap(\.enjoyment), !ratings.isEmpty {
+                day.feeling = Double(ratings.reduce(0, +)) / Double(ratings.count)
+            }
+            return day
         }
     }
 

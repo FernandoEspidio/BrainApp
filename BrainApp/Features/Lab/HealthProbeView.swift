@@ -5,6 +5,7 @@ import SwiftUI
 struct HealthProbeView: View {
     private static let daysBack = 60
 
+    @Environment(AppModel.self) private var model
     @State private var source = HealthKitDataSource()
     @State private var state: ProbeState = .idle
 
@@ -19,6 +20,10 @@ struct HealthProbeView: View {
         let connections: [HealthConnections.Result]
         let momentCount: Int
         let engineFindings: [String]
+        /// False in demo mode: fictional check-ins are never mixed with real Health data.
+        let usedCheckIns: Bool
+
+        var timeInBedNights: Int { days.filter(\.sleepIsTimeInBed).count }
     }
 
     var body: some View {
@@ -59,11 +64,15 @@ struct HealthProbeView: View {
         Section {
             ForEach(HealthConnections.coverage(result.days), id: \.metric) { row in
                 LabeledContent(row.metric.label, value: "\(row.days) of \(result.days.count) days")
+                if row.metric == .sleep, result.timeInBedNights > 0 {
+                    LabeledContent("   only time in bed", value: "\(result.timeInBedNights) nights")
+                }
             }
         } header: {
             Text("Data found")
         } footer: {
-            Text("Empty rows can mean no data or no permission: Health doesn't say which.")
+            Text("Empty rows can mean no data or no permission: Health doesn't say which. Time in bed comes from the iPhone's Sleep Schedule when there's no Watch, and overestimates sleep."
+                 + (result.usedCheckIns ? "" : " Demo mode is on, so check-ins were left out."))
         }
 
         Section("Connections") {
@@ -96,11 +105,13 @@ struct HealthProbeView: View {
             try await source.requestAuthorization()
             let calendar = Calendar.current
             let start = calendar.date(byAdding: .day, value: -Self.daysBack, to: calendar.startOfDay(for: .now)) ?? .now
-            let days = try await source.dailySummaries(since: start)
+            let checkIns = model.isDemoMode ? [] : model.repository.snapshot.activities
+            let days = HealthConnections.addingCheckIns(checkIns, to: try await source.dailySummaries(since: start))
             let moments = try await source.fetchActivities(since: start)
             let report = InsightEngine().analyze(activities: moments, areas: LifeArea.builtIns)
             state = .done(ProbeResult(days: days, connections: HealthConnections.evaluate(days),
-                                      momentCount: moments.count, engineFindings: report.discoveries.map(\.title)))
+                                      momentCount: moments.count, engineFindings: report.discoveries.map(\.title),
+                                      usedCheckIns: !model.isDemoMode))
         } catch {
             state = .failed(error.localizedDescription)
         }
@@ -111,13 +122,23 @@ struct HealthProbeView: View {
         var lines = ["BrainApp Health probe · last \(result.days.count) days", "", "Data found:"]
         for row in HealthConnections.coverage(result.days) {
             lines.append("- \(row.metric.label): \(row.days) days")
+            if row.metric == .sleep, result.timeInBedNights > 0 {
+                lines.append("  (\(result.timeInBedNights) nights only time in bed)")
+            }
         }
+        if !result.usedCheckIns { lines.append("(demo mode: check-ins left out)") }
         lines += ["", "Connections:"]
         for c in result.connections {
             lines.append("- \(c.rule.title): \(ConnectionResultRow.verdictLabel(c.verdict))")
+            guard c.high.days + c.low.days > 0 else {
+                lines.append("  No days with both numbers.")
+                continue
+            }
             lines.append("  \(c.high.label): \(c.rule.effect.format(c.high.mean)), \(c.high.days) days")
             lines.append("  \(c.low.label): \(c.rule.effect.format(c.low.mean)), \(c.low.days) days")
-            lines.append("  Difference \(c.differenceText), effect size \(c.effectSize.formatted(.number.precision(.fractionLength(2))))")
+            if c.verdict != .notEnoughData {
+                lines.append("  Difference \(c.differenceText), effect size \(c.effectSize.formatted(.number.precision(.fractionLength(2))))")
+            }
         }
         lines += ["", "Engine on \(result.momentCount) Health moments: "
                   + (result.engineFindings.isEmpty ? "nothing" : result.engineFindings.joined(separator: "; "))]
@@ -145,8 +166,14 @@ private struct ConnectionResultRow: View {
                     .font(.caption.weight(.bold))
                     .foregroundStyle(result.verdict == .connection ? Theme.pinkDeep : Theme.inkSoft)
             }
-            group(result.high)
-            group(result.low)
+            if result.high.days + result.low.days == 0 {
+                Text("No days with both numbers.")
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.inkSoft)
+            } else {
+                group(result.high)
+                group(result.low)
+            }
             if result.verdict != .notEnoughData {
                 Text("\(result.differenceText) · effect size \(result.effectSize.formatted(.number.precision(.fractionLength(2))))")
                     .font(.subheadline.weight(.semibold))
