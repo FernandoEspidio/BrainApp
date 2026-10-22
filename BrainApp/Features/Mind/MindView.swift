@@ -10,6 +10,7 @@ struct MindView: View {
     @State private var hunchTarget: HunchRoute?
     @State private var showNewHunch = false
     @State private var showSettled = false
+    @State private var showHunchTest = false
 
     var body: some View {
         let repo = model.repository
@@ -55,6 +56,10 @@ struct MindView: View {
                         Text("Something you believe about yourself? Check it for a few days.")
                             .font(.subheadline)
                             .foregroundStyle(Theme.inkSoft)
+                        Button { showHunchTest = true } label: {
+                            Label("Test your hunch", systemImage: "sparkles")
+                        }
+                        .buttonStyle(InkButtonStyle())
                         if testing.isEmpty {
                             Button { showNewHunch = true } label: {
                                 Label("Start your first hunch", systemImage: "lightbulb.max")
@@ -94,6 +99,8 @@ struct MindView: View {
             .sheet(item: $evidenceTarget) { discovery in EvidenceSheet(discoveryID: discovery.id) }
             .sheet(item: $hunchTarget) { route in HunchDetailSheet(hunchID: route.id) }
             .sheet(isPresented: $showNewHunch) { NewHunchSheet(suggestionsFrom: discoveries) }
+            // PROTOTYPE: the guess-and-verdict flow on made-up data, for the demo.
+            .fullScreenCover(isPresented: $showHunchTest) { PrototypeView() }
         }
     }
 
