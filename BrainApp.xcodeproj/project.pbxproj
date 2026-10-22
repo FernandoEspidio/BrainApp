@@ -462,6 +462,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = BrainApp/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Optional camera assistance helps find the direction of a nearby friend";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "BrainApp reads your sleep, workouts, steps, mindful minutes and mood to show how the things you do affect each other. Nothing leaves your iPhone.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "To swap your brain buddy with a friend's iPhone nearby.";
 				INFOPLIST_KEY_NSNearbyInteractionUsageDescription = "To show how far your friend is when you throw your brain buddy.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -506,6 +507,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = BrainApp/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Optional camera assistance helps find the direction of a nearby friend";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "BrainApp reads your sleep, workouts, steps, mindful minutes and mood to show how the things you do affect each other. Nothing leaves your iPhone.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "To swap your brain buddy with a friend's iPhone nearby.";
 				INFOPLIST_KEY_NSNearbyInteractionUsageDescription = "To show how far your friend is when you throw your brain buddy.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;

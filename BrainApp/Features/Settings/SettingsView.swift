@@ -106,6 +106,7 @@ struct SettingsView: View {
                 } label: {
                     Label("Hints", systemImage: "text.bubble")
                 }
+                PrototypeLabRow()
                 #if os(iOS)
                 NavigationLink {
                     ScreenTimeProbeView()
