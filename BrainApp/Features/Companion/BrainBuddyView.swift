@@ -2,9 +2,15 @@ import SwiftUI
 
 /// A short facial performance played when the brain is tapped.
 enum BrainReaction: String, CaseIterable, Sendable {
-    case giggle, wink, surprised, proud, cheeky, puff, yawn, nod, wiggle
+    case giggle, wink, surprised, proud, cheeky, puff, yawn, nod, wiggle, suspicious, kiss, lookAround
 
-    var duration: Double { self == .yawn ? 2.0 : 1.4 }
+    var duration: Double {
+        switch self {
+        case .yawn, .lookAround: return 2.0
+        case .suspicious: return 1.8
+        default: return 1.4
+        }
+    }
 
     /// Arms switch pose for the bigger reactions.
     var armsMood: BrainMood? {
@@ -24,8 +30,7 @@ enum BrainReaction: String, CaseIterable, Sendable {
         switch self {
         case .giggle:
             q.smile = max(q.smile, e)
-            q.leftEyeOpen *= 1 - 0.85 * e
-            q.rightEyeOpen *= 1 - 0.85 * e
+            q.squint = max(q.squint, e)
             q.jawOpen = max(q.jawOpen, 0.35 * e * abs(wave(10)))
             q.headRoll += 0.18 * e * wave(6)
         case .wink:
@@ -34,6 +39,7 @@ enum BrainReaction: String, CaseIterable, Sendable {
             q.headRoll += 0.15 * e
         case .surprised:
             q.browUp = max(q.browUp, e)
+            q.eyeWide = max(q.eyeWide, e)
             q.jawOpen = max(q.jawOpen, 0.6 * e)
             q.leftEyeOpen = max(q.leftEyeOpen, e)
             q.rightEyeOpen = max(q.rightEyeOpen, e)
@@ -62,6 +68,22 @@ enum BrainReaction: String, CaseIterable, Sendable {
         case .wiggle:
             q.headRoll += 0.3 * e * wave(8)
             q.smile = max(q.smile, 0.5 * e)
+        case .suspicious:
+            q.rightBrowRaise = max(q.rightBrowRaise, e)
+            q.leftEyeOpen *= 1 - 0.45 * e
+            q.mouthShift += 0.8 * e
+            q.smile = max(q.smile, 0.25 * e)
+            q.gazeX += 0.9 * e
+            q.headRoll -= 0.1 * e
+        case .kiss:
+            q.pucker = max(q.pucker, e)
+            q.smile = 0
+            q.rightEyeOpen *= 1 - e
+            q.headRoll += 0.12 * e
+        case .lookAround:
+            q.gazeX += 0.95 * e * wave(2)
+            q.headYaw += 0.25 * e * wave(2)
+            q.eyeWide = max(q.eyeWide, 0.4 * e)
         }
         return q
     }
@@ -119,13 +141,18 @@ struct BrainBuddyView: View {
     var mood: BrainMood
     var basePose: FacePose
     var livePose: FacePose?
-    /// A recorded/preset animoji to loop instead of the idle face.
-    var clip: [FacePose]? = nil
+    /// Live camera mirror, read at draw time so the parent view doesn't re-render on every face update.
+    var liveSource: FaceTracker? = nil
+    /// A recorded/preset move to loop instead of the idle face.
+    var clip: BrainClip? = nil
+    /// When set, `clip` plays once from this moment instead of looping.
+    var clipStart: Date? = nil
     var reaction: ActiveReaction?
     var stage: Int?
     var poke: Int
     var onTap: () -> Void
 
+    @State private var smoother = PoseSmoother()
     @State private var look: CGSize = .zero
     @State private var releasedLook: CGSize = .zero
     @State private var releaseDate: Date = .distantPast
@@ -133,19 +160,20 @@ struct BrainBuddyView: View {
 
     var body: some View {
         let variant = Theme.brainVariant(appearance.colorIndex)
-        let paused = reduceMotion && livePose == nil && reaction == nil && (clip ?? []).isEmpty
+        let paused = reduceMotion && livePose == nil && liveSource == nil && reaction == nil && (clip ?? .empty).isEmpty
 
         ZStack {
             Canvas { context, size in
                 BrainDrawing.drawHalo(context, size: size, mood: mood, stage: stage)
             }
-            TimelineView(.animation(minimumInterval: 1.0 / 45.0, paused: paused)) { timeline in
+            // Full display rate (60/120 Hz): the face is smoothed per frame, so it glides between camera updates.
+            TimelineView(.animation(minimumInterval: liveSource == nil && livePose == nil ? 1.0 / 45.0 : nil, paused: paused)) { timeline in
                 let now = timeline.date
                 let t = now.timeIntervalSinceReferenceDate
                 Canvas { context, size in
-                    var pose = livePose
-                        ?? AnimojiClip.frame(in: clip ?? [], at: t)
-                        ?? (reduceMotion ? basePose : BrainExpressions.idle(basePose, time: t, sleepy: mood == .resting))
+                    let idle = reduceMotion ? basePose : BrainExpressions.idle(basePose, time: t, sleepy: mood == .resting)
+                    let target = livePose ?? liveSource?.livePose ?? clipPose(at: now, idle: idle) ?? idle
+                    var pose = smoother.next(toward: target, at: t, live: liveSource != nil || livePose != nil)
                     var arms = mood
                     if let reaction {
                         let progress = now.timeIntervalSince(reaction.start) / reaction.kind.duration
@@ -164,7 +192,7 @@ struct BrainBuddyView: View {
                     let speed: Double = mood == .moving || mood == .celebrating ? 5 : 2.2
                     let bob = reduceMotion ? 0 : CGFloat(sin(t * speed) * 2)
                     BrainDrawing.drawBuddy(context, size: size, pose: pose, mood: mood, armsMood: arms,
-                                           variant: variant, accessory: appearance.accessory,
+                                           variant: variant, outfit: appearance.outfit,
                                            time: reduceMotion ? nil : t, bob: bob)
                 }
             }
@@ -195,14 +223,44 @@ struct BrainBuddyView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(appearance.name), \(mood.title)")
         .accessibilityAddTraits(.isButton)
-        .accessibilityHint("Tap for a quick insight")
+        .accessibilityHint(accessibilityTapHint)
+    }
+
+    var accessibilityTapHint = "Tap for a quick insight"
+
+    private func clipPose(at date: Date, idle: FacePose) -> FacePose? {
+        guard let clip, !clip.isEmpty else { return nil }
+        return clip.playback(at: date, start: clipStart, rest: idle)
+    }
+}
+
+/// Frame-rate-independent smoothing of the drawn face. Camera poses arrive at their own pace;
+/// easing toward them every display frame removes the "steps" between updates.
+/// A reference type on purpose: it's updated while drawing, without re-rendering the view.
+final class PoseSmoother {
+    private var pose: FacePose?
+    private var lastTime: Double = 0
+
+    func next(toward target: FacePose, at time: Double, live: Bool) -> FacePose {
+        guard live, let current = pose else {
+            pose = target
+            lastTime = time
+            return target
+        }
+        let dt = min(max(time - lastTime, 0), 0.1)
+        lastTime = time
+        // ~70 ms time constant: responsive, but no jitter.
+        let amount = Float(1 - exp(-dt / 0.07))
+        let next = current.blended(toward: target, amount: amount)
+        pose = next
+        return next
     }
 }
 
 extension BrainDrawing {
     /// Puppet brain (expressive face) + the current mood's arms, props and accessory.
     static func drawBuddy(_ context: GraphicsContext, size: CGSize, pose: FacePose, mood: BrainMood, armsMood: BrainMood,
-                          variant: Theme.BrainVariant, accessory: CompanionAppearance.Accessory,
+                          variant: Theme.BrainVariant, outfit: Outfit,
                           time: TimeInterval?, bob: CGFloat) {
         let base = unitContext(context, size: size)
         let yaw = CGFloat(pose.headYaw)
@@ -232,8 +290,8 @@ extension BrainDrawing {
         drawPuppetFace(face, pose: pose)
 
         drawArms(body, mood: armsMood, variant: variant)
-        drawProps(body, mood: mood, time: time)
-        drawAccessory(body, accessory: accessory, mood: mood)
+        drawProps(body, mood: mood, time: time, wearsEyewear: outfit.eyewear != .none)
+        drawOutfit(body: body, face: face, outfit: outfit, variant: variant, mood: mood)
         if mood == .resting { drawBlanketFront(root) }
     }
 }

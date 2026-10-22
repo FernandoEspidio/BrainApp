@@ -1,10 +1,10 @@
 import SwiftUI
 
-/// Today: the brain animoji is the screen.
-/// - Its face shows your current state (sleepy, focused, happier as rings fill).
-/// - Tap it: it reacts and tells you one real insight (tap the bubble to open that ring).
-/// - Drag it: it looks around. (Mirror me / sharing lives in Friends.)
-/// - Below: today's five rings (tap → goal detail) and one card.
+/// Today answers one question: "what does my brain know about me?"
+/// - A thought above the brain: the newest thing it noticed (or how close it is to its first discovery).
+///   Tap it → the evidence, with "That's me / Not me / Test it".
+/// - The brain in the middle, the five life areas around it (today's rings), connected like synapses.
+/// - At most ONE card below: today's hunch check-in first (the "test it" half of the loop), else a quick check-in.
 struct HomeView: View {
     @Environment(AppModel.self) private var model
     @AppStorage("hasTappedBrain") private var hasTappedBrain = false
@@ -15,6 +15,7 @@ struct HomeView: View {
     @State private var lineIndex = 0
     @State private var logRequest: LogRequest?
     @State private var evidenceTarget: Discovery?
+    @State private var hunchTarget: HunchRoute?
 
     var body: some View {
         let repo = model.repository
@@ -26,42 +27,43 @@ struct HomeView: View {
         let card = repo.homeCard()
         let base = BrainExpressions.base(mood: mood, overallProgress: repo.overallProgress(),
                                          anyRingClosed: rings.contains(where: \.isComplete))
-        let bubbleText = line?.text ?? mood.title
+        let discovery = repo.rankedDiscoveries.first { repo.snapshot.feedback[$0.id]?.notRepresentative != true }
 
         NavigationStack {
             ZStack {
                 (night ? Theme.night : Theme.cream).ignoresSafeArea()
 
                 ScrollView {
-                    VStack(spacing: 18) {
+                    VStack(spacing: 10) {
                         header(repo: repo, ink: ink)
                         if repo.isDemo { DemoBanner() }
 
-                        // The brain
-                        VStack(spacing: 4) {
-                            bubble(text: bubbleText, ringID: line?.ringID)
+                        thought(repo: repo, discovery: discovery)
+                            .padding(.horizontal)
+                            .padding(.top, 4)
+
+                        BrainHubView(rings: rings) {
                             BrainBuddyView(
                                 appearance: repo.snapshot.companion,
                                 mood: mood,
                                 basePose: base,
                                 livePose: nil,
+                                clip: nil,
                                 reaction: reaction,
                                 stage: live.stage,
                                 poke: poke,
                                 onTap: { tapBrain(repo: repo, mood: mood) }
                             )
-                            .frame(width: 270, height: 270)
                             .sensoryFeedback(.impact(weight: .light), trigger: poke)
-                            tapHint(ink: ink)
                         }
+                        .padding(.top, -6)
 
-                        // Today's rings
-                        RingTileRow(rings: rings, ringSize: 46, showsNames: false)
-                            .padding(.vertical, 4)
-                            .cardStyle(padding: 14)
-                            .padding(.horizontal)
+                        tapHint(ink: ink)
 
-                        if card.isShown {
+                        if let hunch = repo.hunchToCheckIn() ?? repo.testingHunches.first(where: \.isReadyToDecide) {
+                            HunchCheckInCard(hunch: hunch) { hunchTarget = HunchRoute(id: hunch.id) }
+                                .padding(.horizontal)
+                        } else if card.isShown {
                             HomeCardView(
                                 card: card,
                                 onOpenDiscovery: { evidenceTarget = $0 },
@@ -73,6 +75,7 @@ struct HomeView: View {
                         }
                     }
                     .padding(.bottom, 24)
+                    .animation(.snappy, value: repo.hunchToCheckIn()?.id)
                 }
                 .scrollBounceBehavior(.basedOnSize)
             }
@@ -81,7 +84,37 @@ struct HomeView: View {
             .navigationDestination(for: AreaRoute.self) { route in AreaDetailView(areaID: route.id) }
             .sheet(item: $logRequest) { request in LogActivitySheet(existing: nil, presetAreaID: request.areaID) }
             .sheet(item: $evidenceTarget) { discovery in EvidenceSheet(discoveryID: discovery.id) }
+            .sheet(item: $hunchTarget) { route in HunchDetailSheet(hunchID: route.id) }
             .animation(.easeInOut(duration: 0.35), value: night)
+        }
+    }
+
+    /// The brain's thought: a tap-line (after tapping the brain), the newest discovery, or "still learning".
+    @ViewBuilder
+    private func thought(repo: LocalRepository, discovery: Discovery?) -> some View {
+        if let line {
+            if let ringID = line.ringID {
+                NavigationLink(value: RingRoute(id: ringID)) {
+                    ThoughtBubble(eyebrow: "Right now", text: line.text, symbol: "bubble.left.fill")
+                }
+                .buttonStyle(.plain)
+            } else {
+                ThoughtBubble(eyebrow: "Right now", text: line.text, symbol: "bubble.left.fill", isTappable: false)
+            }
+        } else if let discovery, !repo.report.isEarlyStage {
+            Button { evidenceTarget = discovery } label: {
+                ThoughtBubble(eyebrow: repo.isUnseen(discovery) ? "I noticed something new" : "I think…",
+                              text: discovery.title, symbol: repo.isUnseen(discovery) ? "sparkles" : "brain")
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Shows why, and lets you say if it's you")
+        } else {
+            let total = InsightThresholds.minimumActivitiesForPatterns
+            ThoughtBubble(eyebrow: "Getting to know you",
+                          text: "A few more moments and I'll tell you something about you.",
+                          symbol: "ellipsis.bubble",
+                          learning: (min(repo.report.usableCount, total), total),
+                          isTappable: false)
         }
     }
 
@@ -106,21 +139,9 @@ struct HomeView: View {
 
     // MARK: - Pieces
 
-    @ViewBuilder
-    private func bubble(text: String, ringID: String?) -> some View {
-        if let ringID {
-            NavigationLink(value: RingRoute(id: ringID)) {
-                SpeechBubble(text: text, showsChevron: true)
-            }
-            .buttonStyle(.plain)
-        } else {
-            SpeechBubble(text: text, showsChevron: false)
-        }
-    }
-
     /// Shown only until the first tap; keeps the same height afterwards so nothing jumps.
     private func tapHint(ink: Color) -> some View {
-        Label("Tap me", systemImage: "hand.tap.fill")
+        Label("Tap me · tap an area for its ring", systemImage: "hand.tap.fill")
             .font(.caption.weight(.semibold))
             .foregroundStyle(ink.opacity(0.55))
             .symbolEffect(.pulse)
@@ -164,7 +185,8 @@ private extension HomeCard {
     /// Quiet states say nothing: the brain already shows it.
     var isShown: Bool {
         switch self {
-        case .gettingToKnowYou, .allQuiet, .experiment: return false
+        // New discoveries already live in the thought bubble.
+        case .gettingToKnowYou, .allQuiet, .experiment, .newDiscovery: return false
         default: return true
         }
     }

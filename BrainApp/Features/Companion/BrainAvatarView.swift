@@ -16,7 +16,7 @@ struct BrainAvatarView: View {
         BrainCharacterView(
             mood: mood,
             variant: Theme.brainVariant(appearance.colorIndex),
-            accessory: appearance.accessory,
+            outfit: appearance.outfit,
             stage: showsStage ? stage : nil,
             showsHalo: showsHalo,
             animated: animated,

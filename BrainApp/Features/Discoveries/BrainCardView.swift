@@ -10,7 +10,7 @@ struct BrainCardView: View {
     var body: some View {
         VStack(spacing: 14) {
             AnimojiPlayer(appearance: card.appearance, mood: card.brainMood ?? .idle,
-                          clip: card.animoji ?? [], animated: animated)
+                          clip: card.animoji ?? .empty, animated: animated)
                 .frame(width: 150, height: 150)
 
             VStack(spacing: 2) {

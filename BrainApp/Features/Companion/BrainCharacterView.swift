@@ -7,7 +7,7 @@ import SwiftUI
 struct BrainCharacterView: View {
     var mood: BrainMood = .idle
     var variant: Theme.BrainVariant = Theme.brainVariant(0)
-    var accessory: CompanionAppearance.Accessory = .none
+    var outfit: Outfit = .none
     /// Shows the understanding stage as dots around the halo. nil = no dots.
     var stage: Int? = nil
     var showsHalo = true
@@ -30,7 +30,7 @@ struct BrainCharacterView: View {
                 let time = shouldAnimate ? timeline.date.timeIntervalSinceReferenceDate : nil
                 Canvas { context, size in
                     BrainDrawing.drawCharacter(context, size: size, mood: mood, variant: variant,
-                                               accessory: accessory, time: time)
+                                               outfit: outfit, time: time)
                 }
             }
             .keyframeAnimator(initialValue: CGFloat(0), trigger: poke) { content, offset in
@@ -114,7 +114,7 @@ enum BrainDrawing {
     // MARK: Character
 
     static func drawCharacter(_ context: GraphicsContext, size: CGSize, mood: BrainMood,
-                              variant: Theme.BrainVariant, accessory: CompanionAppearance.Accessory,
+                              variant: Theme.BrainVariant, outfit: Outfit,
                               time: TimeInterval?) {
         var ctx = unitContext(context, size: size)
 
@@ -136,8 +136,8 @@ enum BrainDrawing {
         drawBody(ctx, variant: variant)
         drawFace(ctx, mood: mood, blink: blink)
         drawArms(ctx, mood: mood, variant: variant)
-        drawProps(ctx, mood: mood, time: time)
-        drawAccessory(ctx, accessory: accessory, mood: mood)
+        drawProps(ctx, mood: mood, time: time, wearsEyewear: outfit.eyewear != .none)
+        drawOutfit(body: ctx, face: ctx, outfit: outfit, variant: variant, mood: mood)
         if mood == .resting { drawBlanketFront(ctx) }
     }
 
@@ -210,7 +210,7 @@ enum BrainDrawing {
         }
     }
 
-    static func drawProps(_ ctx: GraphicsContext, mood: BrainMood, time: TimeInterval?) {
+    static func drawProps(_ ctx: GraphicsContext, mood: BrainMood, time: TimeInterval?, wearsEyewear: Bool = false) {
         switch mood {
         case .resting:
             ctx.fill(UnitPath.parse("M58,66 C70,40 110,28 150,36 L132,64 Z"), with: .color(Theme.lavender))
@@ -231,7 +231,7 @@ enum BrainDrawing {
                 ctx.fill(Path(roundedRect: CGRect(x: x, y: 60, width: 12, height: 21), cornerRadius: 3), with: .color(ink))
             }
         case .learning:
-            drawGlasses(ctx)
+            if !wearsEyewear { drawGlasses(ctx) }
             let book = UnitPath.parse("M72,122 L100,128 L128,122 L128,148 L100,154 L72,148 Z")
             ctx.fill(book, with: .color(white))
             ctx.stroke(book, with: .color(ink), style: StrokeStyle(lineWidth: 2.5, lineJoin: .round))
@@ -275,29 +275,6 @@ enum BrainDrawing {
         stroke(ctx, "M95,100 L105,100", ink, width: 2.5)
     }
 
-    static func drawAccessory(_ ctx: GraphicsContext, accessory: CompanionAppearance.Accessory, mood: BrainMood) {
-        switch accessory {
-        case .none:
-            break
-        case .glasses:
-            if mood != .learning { drawGlasses(ctx) }
-        case .headphones:
-            guard mood != .resting && mood != .moving else { return }
-            stroke(ctx, "M30,84 C34,22 166,22 170,84", ink, width: 5)
-            ctx.fill(Path(roundedRect: CGRect(x: 20, y: 76, width: 16, height: 28), cornerRadius: 6), with: .color(ink))
-            ctx.fill(Path(roundedRect: CGRect(x: 164, y: 76, width: 16, height: 28), cornerRadius: 6), with: .color(ink))
-        case .leaf:
-            guard mood != .resting else { return }
-            ctx.fill(UnitPath.parse("M100,32 C112,14 132,16 134,18 C130,32 116,38 100,32 Z"), with: .color(Theme.Deep.mint))
-            stroke(ctx, "M100,32 C108,26 118,22 128,20", Theme.Tint.mint, width: 1.5)
-        case .star:
-            guard mood != .resting else { return }
-            let (x, y, r): (CGFloat, CGFloat, CGFloat) = (142, 34, 10)
-            ctx.fill(UnitPath.parse("M\(x),\(y - r) L\(x + 3),\(y - 3) L\(x + r),\(y) L\(x + 3),\(y + 3) L\(x),\(y + r) L\(x - 3),\(y + 3) L\(x - r),\(y) L\(x - 3),\(y - 3) Z"),
-                     with: .color(Theme.sun))
-        }
-    }
-
     static func drawBlanketBack(_ ctx: GraphicsContext) {
         ctx.fill(UnitPath.parse("M30,150 C60,136 140,136 170,150 L176,180 L24,180 Z"), with: .color(Theme.lavender.opacity(0.9)))
     }
@@ -309,7 +286,27 @@ enum BrainDrawing {
 
 /// Minimal SVG path parser for the commands used above: absolute M, L, C and Z.
 enum UnitPath {
+    /// Parsed paths are reused: the same strings are drawn every frame. Bounded, so strings built
+    /// from live values (mouths, brows) can't grow it without limit.
+    private static let cache: NSCache<NSString, PathBox> = {
+        let cache = NSCache<NSString, PathBox>()
+        cache.countLimit = 400
+        return cache
+    }()
+
+    final class PathBox {
+        let path: Path
+        init(_ path: Path) { self.path = path }
+    }
+
     static func parse(_ d: String) -> Path {
+        if let hit = cache.object(forKey: d as NSString) { return hit.path }
+        let path = build(d)
+        cache.setObject(PathBox(path), forKey: d as NSString)
+        return path
+    }
+
+    private static func build(_ d: String) -> Path {
         var path = Path()
         var tokens: [String] = []
         var current = ""

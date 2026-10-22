@@ -7,6 +7,7 @@ struct OnboardingView: View {
     @Environment(AppModel.self) private var model
     @State private var name = ""
     @State private var poke = 0
+    @State private var choosingSample = false
     @FocusState private var nameFocused: Bool
 
     var body: some View {
@@ -40,9 +41,16 @@ struct OnboardingView: View {
                     .buttonStyle(InkButtonStyle())
                     .padding(.horizontal)
 
-                Button("Try with sample data") { model.setDemoMode(true) }
+                Button("Look around with a sample profile") { choosingSample = true }
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(Theme.inkSoft)
+                    .confirmationDialog("Sample profile", isPresented: $choosingSample, titleVisibility: .visible) {
+                        ForEach(DemoProfile.allCases) { profile in
+                            Button(profile.title) { model.setDemoProfile(profile) }
+                        }
+                    } message: {
+                        Text("Fictional data, kept only in memory. Your own brain starts fresh with “Let's go”.")
+                    }
             }
             .padding(.bottom, 12)
         }

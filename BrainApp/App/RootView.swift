@@ -1,6 +1,8 @@
 import SwiftUI
 
 /// Four tabs, one job each. Every feature is reachable from a visible tab → list → detail.
+/// Today: what your brain knows today · Mind: what it learned over time (traits, hunches, map) ·
+/// Friends: trade brains · Me: your look, data and settings.
 /// Ring completions are celebrated here so they show up wherever the user is.
 struct RootView: View {
     @Environment(AppModel.self) private var model
@@ -14,8 +16,8 @@ struct RootView: View {
                 TabView {
                     HomeView()
                         .tabItem { Label("Today", systemImage: "brain.head.profile") }
-                    YouView()
-                        .tabItem { Label("Insights", systemImage: "sparkles") }
+                    MindView()
+                        .tabItem { Label("Mind", systemImage: "point.3.connected.trianglepath.dotted") }
                     FriendsTab()
                         .tabItem { Label("Friends", systemImage: "person.2") }
                     MeView()
@@ -55,9 +57,9 @@ struct RootView: View {
     }
 }
 
-/// Friends tab: your brain card, sending it, and your friends' brains.
+/// Friends tab: your brain, trading it, and the brains you've met.
 struct FriendsTab: View {
     var body: some View {
-        NavigationStack { NearbyFriendsView() }
+        FriendsView()
     }
 }

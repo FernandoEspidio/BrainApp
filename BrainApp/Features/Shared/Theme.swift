@@ -38,7 +38,9 @@ enum Theme {
         static let lilac = Color(hex: 0x8F87E6)
     }
 
-    /// Brain body colors the user can pick. Pink is the brand default.
+    /// Brain body colors the user can pick: a closed, curated set of pastels that all sit well on cream,
+    /// keep the ink face readable and never clash with the area tints. Pink is the brand default.
+    /// Only ever append (the index is stored and shared).
     struct BrainVariant {
         let name: String
         let fill: Color
@@ -50,8 +52,15 @@ enum Theme {
         BrainVariant(name: "Pink", fill: Color(hex: 0xF49AC1), shade: Color(hex: 0xDE6F9F), light: Color(hex: 0xFBC6DD)),
         BrainVariant(name: "Lilac", fill: Color(hex: 0xC4B5F4), shade: Color(hex: 0x9C89E0), light: Color(hex: 0xE2DAFB)),
         BrainVariant(name: "Peach", fill: Color(hex: 0xF8B79A), shade: Color(hex: 0xE08E6C), light: Color(hex: 0xFCD7C5)),
-        BrainVariant(name: "Mint", fill: Color(hex: 0x9FDCC2), shade: Color(hex: 0x6CBF9E), light: Color(hex: 0xCBEFDF))
+        BrainVariant(name: "Mint", fill: Color(hex: 0x9FDCC2), shade: Color(hex: 0x6CBF9E), light: Color(hex: 0xCBEFDF)),
+        BrainVariant(name: "Sky", fill: Color(hex: 0xA9C8F5), shade: Color(hex: 0x7BA3E2), light: Color(hex: 0xD4E4FB)),
+        BrainVariant(name: "Butter", fill: Color(hex: 0xF6D57E), shade: Color(hex: 0xDDB04A), light: Color(hex: 0xFBEAB8)),
+        BrainVariant(name: "Coral", fill: Color(hex: 0xF7A4A0), shade: Color(hex: 0xE07672), light: Color(hex: 0xFBCFCB)),
+        BrainVariant(name: "Aqua", fill: Color(hex: 0x98D9DD), shade: Color(hex: 0x62BBC2), light: Color(hex: 0xCAEEF0))
     ]
+
+    /// An unknown brain (not met yet): flat, colorless silhouette.
+    static let mystery = BrainVariant(name: "Unknown", fill: Color(hex: 0xC9C3D3), shade: Color(hex: 0xB3ACC0), light: Color(hex: 0xC9C3D3))
 
     static func brainVariant(_ index: Int) -> BrainVariant {
         brainVariants[((index % brainVariants.count) + brainVariants.count) % brainVariants.count]

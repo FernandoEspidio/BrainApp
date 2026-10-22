@@ -1,9 +1,33 @@
 import Foundation
 
-/// Simple customization of the brain companion.
-struct CompanionAppearance: Codable, Hashable, Sendable {
-    enum Accessory: String, Codable, CaseIterable, Identifiable, Sendable {
-        case none, glasses, headphones, leaf, star
+/// Customization of the brain companion: a name, a curated color and two accessory slots
+/// (something on the head, something on the eyes) so looks can be combined.
+struct CompanionAppearance: Hashable, Sendable {
+    enum Headwear: String, CaseIterable, Identifiable, Sendable {
+        case none, sprout, star, crown, beanie, party, bow, cap, headphones, catEars, flower, wizard
+
+        var id: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .none: return "None"
+            case .sprout: return "Sprout"
+            case .star: return "Star"
+            case .crown: return "Crown"
+            case .beanie: return "Beanie"
+            case .party: return "Party hat"
+            case .bow: return "Bow"
+            case .cap: return "Cap"
+            case .headphones: return "Headphones"
+            case .catEars: return "Cat ears"
+            case .flower: return "Flower"
+            case .wizard: return "Wizard hat"
+            }
+        }
+    }
+
+    enum Eyewear: String, CaseIterable, Identifiable, Sendable {
+        case none, glasses, shades, hearts, stars
 
         var id: String { rawValue }
 
@@ -11,9 +35,9 @@ struct CompanionAppearance: Codable, Hashable, Sendable {
             switch self {
             case .none: return "None"
             case .glasses: return "Glasses"
-            case .headphones: return "Headphones"
-            case .leaf: return "Leaf"
-            case .star: return "Star"
+            case .shades: return "Shades"
+            case .hearts: return "Heart shades"
+            case .stars: return "Star shades"
             }
         }
     }
@@ -21,7 +45,55 @@ struct CompanionAppearance: Codable, Hashable, Sendable {
     var name: String = "Buddy"
     /// Index into `Theme.brainVariants` (brain color).
     var colorIndex: Int = 0
-    var accessory: Accessory = .none
+    var headwear: Headwear = .none
+    var eyewear: Eyewear = .none
+
+    init(name: String = "Buddy", colorIndex: Int = 0, headwear: Headwear = .none, eyewear: Eyewear = .none) {
+        self.name = name
+        self.colorIndex = colorIndex
+        self.headwear = headwear
+        self.eyewear = eyewear
+    }
+
+    var outfit: Outfit { Outfit(headwear: headwear, eyewear: eyewear) }
+}
+
+/// What the brain wears (passed to the drawing code).
+struct Outfit: Hashable, Sendable {
+    var headwear: CompanionAppearance.Headwear = .none
+    var eyewear: CompanionAppearance.Eyewear = .none
+    static let none = Outfit()
+}
+
+/// Tolerant coding: unknown accessories (from a newer app) become `.none` instead of failing,
+/// and the first prototype's single `accessory` field is read into the right slot.
+extension CompanionAppearance: Codable {
+    private enum CodingKeys: String, CodingKey { case name, colorIndex, headwear, eyewear, accessory }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? "Buddy"
+        colorIndex = try c.decodeIfPresent(Int.self, forKey: .colorIndex) ?? 0
+        headwear = (try? c.decodeIfPresent(String.self, forKey: .headwear)).flatMap(Headwear.init(rawValue:)) ?? .none
+        eyewear = (try? c.decodeIfPresent(String.self, forKey: .eyewear)).flatMap(Eyewear.init(rawValue:)) ?? .none
+        if let legacy = try? c.decodeIfPresent(String.self, forKey: .accessory) {
+            switch legacy {
+            case "glasses": if eyewear == .none { eyewear = .glasses }
+            case "headphones": if headwear == .none { headwear = .headphones }
+            case "leaf": if headwear == .none { headwear = .sprout }
+            case "star": if headwear == .none { headwear = .star }
+            default: break
+            }
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(name, forKey: .name)
+        try c.encode(colorIndex, forKey: .colorIndex)
+        try c.encode(headwear.rawValue, forKey: .headwear)
+        try c.encode(eyewear.rawValue, forKey: .eyewear)
+    }
 }
 
 /// What the brain is "doing" right now. It mirrors a real detected or logged moment,

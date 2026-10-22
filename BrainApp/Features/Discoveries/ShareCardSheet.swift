@@ -14,7 +14,7 @@ struct ShareCardSheet: View {
         @Bindable var bindable = model
         let repo = model.repository
         let card = model.makeCard()
-        let candidates = BrainCardFactory.shareable(repo.rankedDiscoveries, options: model.shareOptions)
+        let candidates = BrainCardFactory.candidates(repo.rankedDiscoveries, hunches: repo.snapshot.hunches, options: model.shareOptions)
         let selected = model.shareOptions.selectedDiscoveryIDs
         let hasAnimoji = model.shareOptions.includeAnimoji && !repo.snapshot.animoji.isEmpty
 
@@ -91,7 +91,7 @@ struct ShareCardSheet: View {
             }
             .onAppear {
                 if model.shareOptions.selectedDiscoveryIDs.isEmpty {
-                    model.shareOptions.selectedDiscoveryIDs = BrainCardFactory.defaultSelection(repo.rankedDiscoveries)
+                    model.shareOptions.selectedDiscoveryIDs = BrainCardFactory.defaultSelection(repo.rankedDiscoveries, hunches: repo.snapshot.hunches)
                 }
                 renderImage()
             }

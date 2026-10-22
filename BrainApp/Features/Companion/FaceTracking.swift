@@ -1,50 +1,39 @@
 import ARKit
+import AVFoundation
 import Foundation
 import Observation
 
-/// The few facial values the brain uses (0…1, angles in radians). ~50 bytes per frame:
-/// recording these instead of video is what makes sharing "brain animojis" cheap later.
-struct FacePose: Hashable, Codable, Sendable {
-    /// Eyes as they appear ON SCREEN (mirrored like a selfie): left = screen left.
-    var leftEyeOpen: Float = 1
-    var rightEyeOpen: Float = 1
-    var jawOpen: Float = 0
-    var smile: Float = 0
-    var browUp: Float = 0
-    var browDown: Float = 0
-    var cheekPuff: Float = 0
-    var tongueOut: Float = 0
-    var pucker: Float = 0
-    var headRoll: Float = 0
-    var headYaw: Float = 0
-    var headPitch: Float = 0
-
-    /// Exponential smoothing to remove jitter.
-    func blended(toward target: FacePose, amount t: Float) -> FacePose {
-        func mix(_ a: Float, _ b: Float) -> Float { a + (b - a) * t }
-        return FacePose(
-            leftEyeOpen: mix(leftEyeOpen, target.leftEyeOpen), rightEyeOpen: mix(rightEyeOpen, target.rightEyeOpen),
-            jawOpen: mix(jawOpen, target.jawOpen), smile: mix(smile, target.smile),
-            browUp: mix(browUp, target.browUp), browDown: mix(browDown, target.browDown),
-            cheekPuff: mix(cheekPuff, target.cheekPuff), tongueOut: mix(tongueOut, target.tongueOut),
-            pucker: mix(pucker, target.pucker), headRoll: mix(headRoll, target.headRoll),
-            headYaw: mix(headYaw, target.headYaw), headPitch: mix(headPitch, target.headPitch)
-        )
-    }
-}
-
-/// TEST: runs ARKit face tracking (front camera, on device, no Internet) and publishes a FacePose.
+/// Runs ARKit face tracking (front camera, on device, no Internet) and publishes a FacePose.
 /// The camera image is never shown or stored. Requires NSCameraUsageDescription.
 /// Works on iPhones with Face ID (TrueDepth) or an A12 chip or later.
+///
+/// Performance: the pose changes ~60 times a second, so it is NOT observable (`livePose`):
+/// brains read it at draw time inside their own TimelineView. Only `isTracking`/`status` notify views,
+/// and only when they actually change. The session runs at the lowest video format available.
 @MainActor
 @Observable
 final class FaceTracker {
     static var isSupported: Bool { ARFaceTrackingConfiguration.isSupported }
 
-    private(set) var pose = FacePose()
+    enum Access { case allowed, notAsked, denied, unsupported }
+
+    static var access: Access {
+        guard isSupported else { return .unsupported }
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized: return .allowed
+        case .notDetermined: return .notAsked
+        default: return .denied
+        }
+    }
+
+    /// Latest smoothed pose (read at draw time; not observed on purpose).
+    @ObservationIgnored private(set) var livePose = FacePose()
+    var pose: FacePose { livePose }
     private(set) var isTracking = false
+    private(set) var isRunning = false
     private(set) var status = "Not started"
-    var smoothing: Float = 0.5
+    /// Light smoothing here; the brain adds frame-rate-independent smoothing when it draws.
+    var smoothing: Float = 0.2
     var mirrored = true
 
     @ObservationIgnored private let session = ARSession()
@@ -62,20 +51,37 @@ final class FaceTracker {
         relay.onFace = { [weak self] face in self?.update(with: face) }
         relay.onStatus = { [weak self] text in
             self?.status = text
-            self?.isTracking = false
+            self?.setTracking(false)
         }
         session.delegate = relay
         let configuration = ARFaceTrackingConfiguration()
         configuration.isLightEstimationEnabled = false
         configuration.maximumNumberOfTrackedFaces = 1
+        configuration.isWorldTrackingEnabled = false
+        // Smallest frames, but never below 60 fps: a low frame rate is what makes the mirror feel choppy.
+        // (We only need blend shapes, never the image, so resolution is the part we can drop.)
+        let formats = ARFaceTrackingConfiguration.supportedVideoFormats
+        let fluid = formats.filter { $0.framesPerSecond >= 60 }
+        if let cheapest = (fluid.isEmpty ? formats : fluid).min(by: {
+            $0.imageResolution.width * $0.imageResolution.height < $1.imageResolution.width * $1.imageResolution.height
+        }) {
+            configuration.videoFormat = cheapest
+        }
         session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
+        isRunning = true
         status = "Looking for your face…"
     }
 
     func stop() {
+        guard isRunning else { return }
         session.pause()
-        isTracking = false
+        isRunning = false
+        setTracking(false)
         status = "Paused"
+    }
+
+    private func setTracking(_ value: Bool) {
+        if isTracking != value { isTracking = value }
     }
 
     /// Use the current head position as "straight ahead".
@@ -87,12 +93,16 @@ final class FaceTracker {
 
     private func update(with face: ARFaceAnchor) {
         guard face.isTracked else {
-            isTracking = false
-            status = "Face lost — look at the screen"
+            if isTracking {
+                setTracking(false)
+                status = "Face lost — look at the screen"
+            }
             return
         }
-        isTracking = true
-        status = "Tracking"
+        if !isTracking {
+            setTracking(true)
+            status = "Tracking"
+        }
 
         let shapes = face.blendShapes
         func value(_ key: ARFaceAnchor.BlendShapeLocation) -> Float { shapes[key]?.floatValue ?? 0 }
@@ -110,6 +120,19 @@ final class FaceTracker {
         let pitch = asin(max(-1, min(1, -forward.y)))
         let roll = atan2(side.y, up.y)
 
+        // Gaze: how much both eyes look toward the user's left/right, up/down.
+        let towardUserLeft = (value(.eyeLookOutLeft) + value(.eyeLookInRight)) / 2
+        let towardUserRight = (value(.eyeLookInLeft) + value(.eyeLookOutRight)) / 2
+        let lookUp = (value(.eyeLookUpLeft) + value(.eyeLookUpRight)) / 2
+        let lookDown = (value(.eyeLookDownLeft) + value(.eyeLookDownRight)) / 2
+        // Same side convention as the eyes above: as a mirror, the user's left is the screen's right.
+        let gazeUser = towardUserRight - towardUserLeft
+        let userLeftBrow = value(.browOuterUpLeft)
+        let userRightBrow = value(.browOuterUpRight)
+        let mouthTowardUserLeft = value(.mouthLeft)
+        let mouthTowardUserRight = value(.mouthRight)
+        let mouthUser = mouthTowardUserRight - mouthTowardUserLeft
+
         var target = FacePose(
             leftEyeOpen: mirrored ? userRightOpen : userLeftOpen,
             rightEyeOpen: mirrored ? userLeftOpen : userRightOpen,
@@ -122,14 +145,23 @@ final class FaceTracker {
             pucker: value(.mouthPucker),
             headRoll: roll,
             headYaw: yaw,
-            headPitch: pitch
+            headPitch: pitch,
+            gazeX: min(max((mirrored ? -gazeUser : gazeUser) * 1.6, -1), 1),
+            gazeY: min(max((lookDown - lookUp) * 1.6, -1), 1),
+            leftBrowRaise: mirrored ? userRightBrow : userLeftBrow,
+            rightBrowRaise: mirrored ? userLeftBrow : userRightBrow,
+            squint: (value(.eyeSquintLeft) + value(.eyeSquintRight)) / 2,
+            eyeWide: (value(.eyeWideLeft) + value(.eyeWideRight)) / 2,
+            frown: (value(.mouthFrownLeft) + value(.mouthFrownRight)) / 2,
+            mouthShift: min(max((mirrored ? -mouthUser : mouthUser) * 1.5, -1), 1),
+            funnel: value(.mouthFunnel)
         )
         raw = target
         target.headYaw = (mirrored ? -1 : 1) * (yaw - neutralYaw)
         target.headRoll = (mirrored ? -1 : 1) * (roll - neutralRoll)
         target.headPitch = pitch - neutralPitch
 
-        pose = pose.blended(toward: target, amount: 1 - smoothing * 0.85)
+        livePose = livePose.blended(toward: target, amount: 1 - smoothing * 0.85).clamped()
     }
 }
 

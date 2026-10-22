@@ -2,32 +2,22 @@ import SwiftUI
 import ImageIO
 import UniformTypeIdentifiers
 
-/// A brain animoji is a short list of facial poses played at a fixed rate.
-/// It comes from your face (Mirror me → Record) or from a preset expression.
+/// Ready-made moves (no camera needed) built from the brain's tap reactions.
 enum AnimojiClip {
-    static let fps: Double = 15
-    static let maxFrames = 60          // 4 seconds
-    static let recordSeconds: Double = 3
-
-    /// A preset expression as a clip (reuses the brain's tap reactions).
-    static func frames(for reaction: BrainReaction) -> [FacePose] {
+    static func clip(for reaction: BrainReaction) -> BrainClip {
         var base = FacePose()
         base.smile = 0.3
+        let fps = BrainClip.recordFPS
         let count = max(2, Int(reaction.duration * fps))
-        return (0..<count).map { index in
+        let frames = (0..<count).map { index in
             reaction.apply(to: base, progress: Double(index) / Double(count - 1))
         }
-    }
-
-    static func frame(in clip: [FacePose], at time: TimeInterval) -> FacePose? {
-        guard !clip.isEmpty else { return nil }
-        let index = Int((time * fps).rounded(.down)) % clip.count
-        return clip[max(0, index)]
+        return BrainClip(fps: fps, frames: frames)
     }
 }
 
 extension BrainReaction {
-    /// Face used on the expression picker.
+    /// Face used on the move picker.
     var emoji: String {
         switch self {
         case .giggle: return "😆"
@@ -39,23 +29,21 @@ extension BrainReaction {
         case .yawn: return "🥱"
         case .nod: return "🙂"
         case .wiggle: return "🤪"
+        case .suspicious: return "🤨"
+        case .kiss: return "😘"
+        case .lookAround: return "👀"
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .lookAround: return "Look around"
+        default: return rawValue.capitalized
         }
     }
 }
 
-extension FacePose {
-    /// Received poses are untrusted: keep every value in its valid range.
-    func clamped() -> FacePose {
-        func unit(_ v: Float) -> Float { v.isFinite ? min(max(v, 0), 1) : 0 }
-        func angle(_ v: Float) -> Float { v.isFinite ? min(max(v, -1), 1) : 0 }
-        return FacePose(leftEyeOpen: unit(leftEyeOpen), rightEyeOpen: unit(rightEyeOpen), jawOpen: unit(jawOpen),
-                        smile: unit(smile), browUp: unit(browUp), browDown: unit(browDown), cheekPuff: unit(cheekPuff),
-                        tongueOut: unit(tongueOut), pucker: unit(pucker), headRoll: angle(headRoll),
-                        headYaw: angle(headYaw), headPitch: angle(headPitch))
-    }
-}
-
-/// The brain drawn in one fixed pose (no timers): used for exported images and GIF frames.
+/// The brain drawn in one fixed pose (no timers): thumbnails, exported images and GIF frames.
 struct BrainPoseView: View {
     var appearance: CompanionAppearance
     var mood: BrainMood = .idle
@@ -66,61 +54,77 @@ struct BrainPoseView: View {
         Canvas { context, size in
             if showsHalo { BrainDrawing.drawHalo(context, size: size, mood: mood, stage: nil) }
             BrainDrawing.drawBuddy(context, size: size, pose: pose, mood: mood, armsMood: mood,
-                                   variant: Theme.brainVariant(appearance.colorIndex), accessory: appearance.accessory,
+                                   variant: Theme.brainVariant(appearance.colorIndex), outfit: appearance.outfit,
                                    time: nil, bob: 0)
         }
         .aspectRatio(1, contentMode: .fit)
     }
 }
 
-/// Plays a clip on loop; with no clip, the brain just idles (blinks, breathes).
+/// Plays a move. `loops`: repeat with a short rest between plays; otherwise play once from `start`
+/// and settle into the idle face. With no clip, the brain just idles (blinks, breathes).
 struct AnimojiPlayer: View {
     var appearance: CompanionAppearance
     var mood: BrainMood = .idle
-    var clip: [FacePose]
+    var clip: BrainClip
     var animated = true
+    var loops = true
+    var showsHalo = true
+    /// Changing it restarts the move (used for "Replay").
+    var start: Date = .distantPast
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let base = BrainExpressions.base(mood: mood, overallProgress: 0.4, anyRingClosed: false)
         if animated && !reduceMotion {
-            TimelineView(.animation(minimumInterval: 1.0 / AnimojiClip.fps)) { timeline in
+            TimelineView(.animation) { timeline in
                 let t = timeline.date.timeIntervalSinceReferenceDate
-                BrainPoseView(appearance: appearance, mood: mood,
-                              pose: AnimojiClip.frame(in: clip, at: t) ?? BrainExpressions.idle(base, time: t, sleepy: mood == .resting))
+                let idle = BrainExpressions.idle(base, time: t, sleepy: mood == .resting)
+                BrainPoseView(appearance: appearance, mood: mood, pose: pose(at: timeline.date, idle: idle),
+                              showsHalo: showsHalo)
             }
         } else {
-            BrainPoseView(appearance: appearance, mood: mood, pose: clip.first ?? base)
+            BrainPoseView(appearance: appearance, mood: mood, pose: clip.frames.first ?? base, showsHalo: showsHalo)
         }
+    }
+
+    private func pose(at date: Date, idle: FacePose) -> FacePose {
+        clip.playback(at: date, start: loops ? nil : start, rest: idle)
     }
 }
 
-/// Turns a clip into an animated GIF that any app can show (Messages, WhatsApp…). Made on device.
+/// Turns a move into an animated GIF that any app can show (Messages, WhatsApp…). Made on device.
 @MainActor
 enum AnimojiExporter {
-    static func gif(clip: [FacePose], appearance: CompanionAppearance, mood: BrainMood, side: CGFloat = 300) -> URL? {
-        let frames = clip.isEmpty ? [FacePose()] : clip
+    static func gif(clip: BrainClip, appearance: CompanionAppearance, mood: BrainMood, side: CGFloat = 300) -> URL? {
+        // 15 fps is plenty for a GIF and keeps the file small.
+        let fps = 15.0
+        let count = max(1, Int(clip.duration * fps))
+        let frames = clip.isEmpty ? [FacePose()] : (0..<count).compactMap { clip.pose(at: Double($0) / fps) }
         let name = appearance.name.filter { $0.isLetter || $0.isNumber }
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("\(name.isEmpty ? "Brain" : name)-animoji.gif")
+            .appendingPathComponent("\(name.isEmpty ? "Brain" : name)-move.gif")
         try? FileManager.default.removeItem(at: url)
 
         guard let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.gif.identifier as CFString,
                                                                 frames.count, nil) else { return nil }
         let fileProperties = [kCGImagePropertyGIFDictionary as String: [kCGImagePropertyGIFLoopCount as String: 0]]
         CGImageDestinationSetProperties(destination, fileProperties as CFDictionary)
-        let frameProperties = [kCGImagePropertyGIFDictionary as String: [kCGImagePropertyGIFDelayTime as String: 1.0 / AnimojiClip.fps]]
+        let frameProperties = [kCGImagePropertyGIFDictionary as String: [kCGImagePropertyGIFDelayTime as String: 1.0 / fps]]
 
         for pose in frames {
-            let content = BrainPoseView(appearance: appearance, mood: mood, pose: pose)
-                .frame(width: side, height: side)
-                .padding(12)
-                .background(Theme.cream)
-            let renderer = ImageRenderer(content: content)
-            renderer.scale = 2
-            if let image = renderer.cgImage {
-                CGImageDestinationAddImage(destination, image, frameProperties as CFDictionary)
+            // One frame at a time: each rendered image is released before the next one is made.
+            autoreleasepool {
+                let content = BrainPoseView(appearance: appearance, mood: mood, pose: pose)
+                    .frame(width: side, height: side)
+                    .padding(12)
+                    .background(Theme.cream)
+                let renderer = ImageRenderer(content: content)
+                renderer.scale = 2
+                if let image = renderer.cgImage {
+                    CGImageDestinationAddImage(destination, image, frameProperties as CFDictionary)
+                }
             }
         }
         return CGImageDestinationFinalize(destination) ? url : nil

@@ -88,6 +88,8 @@ struct EvidenceSheet: View {
                 .accessibilityAddTraits(notRepresentative ? .isSelected : [])
             }
 
+            testItButton(discovery, repo: repo)
+
             VStack(alignment: .leading, spacing: 0) {
                 DisclosureGroup("What we can't tell yet") {
                     VStack(alignment: .leading, spacing: 8) {
@@ -119,6 +121,30 @@ struct EvidenceSheet: View {
             }
             .tint(Theme.ink)
             .cardStyle()
+        }
+    }
+
+    /// "Test it": turn what the app saw into a hunch you check yourself for a few days.
+    @ViewBuilder
+    private func testItButton(_ discovery: Discovery, repo: LocalRepository) -> some View {
+        let existing = repo.snapshot.hunches.first { $0.statement == discovery.title }
+        if let existing {
+            Label(existing.status == .testing ? "You're testing this as a hunch" : "You checked this as a hunch: \(existing.status.label.lowercased())",
+                  systemImage: "lightbulb.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Theme.Deep.butter)
+        } else {
+            Button {
+                repo.addHunch(HunchTemplate.from(discovery).make(isDemo: repo.isDemo))
+            } label: {
+                Label("Test it: check it myself for 5 days", systemImage: "lightbulb")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .foregroundStyle(Theme.ink)
+                    .background(Theme.Tint.butter, in: Capsule())
+            }
+            .buttonStyle(.plain)
         }
     }
 

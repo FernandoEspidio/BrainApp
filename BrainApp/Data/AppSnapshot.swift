@@ -50,15 +50,17 @@ struct AppSnapshot: Codable, Sendable {
     var goals: [String: AreaGoal] = [:]
     /// Ring completions already celebrated (see `RingProgress.celebrationKey`).
     var celebratedRings: Set<String> = []
-    /// The user's brain animoji (a short clip of facial poses) for sharing with friends.
-    var animoji: [FacePose] = []
+    /// The user's brain move (a short clip of facial poses) for sharing with friends.
+    var animoji: BrainClip = .empty
+    /// Things you believe about yourself and are checking day by day.
+    var hunches: [Hunch] = []
 
     init() {}
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion, activities, customAreas, priorities, experiments, feedback,
              seenDiscoveries, companion, understandingHighWater, friends, localCardID, hasCompletedOnboarding,
-             userName, simulateSensing, sensingStartDate, dismissedDetections, goals, celebratedRings, animoji
+             userName, simulateSensing, sensingStartDate, dismissedDetections, goals, celebratedRings, animoji, hunches
     }
 
     /// Tolerant decoding: missing keys take their default value.
@@ -75,7 +77,7 @@ struct AppSnapshot: Codable, Sendable {
         seenDiscoveries = try c.decodeIfPresent([String: SeenDiscovery].self, forKey: .seenDiscoveries) ?? d.seenDiscoveries
         companion = try c.decodeIfPresent(CompanionAppearance.self, forKey: .companion) ?? d.companion
         understandingHighWater = try c.decodeIfPresent(Int.self, forKey: .understandingHighWater) ?? d.understandingHighWater
-        friends = try c.decodeIfPresent([Friend].self, forKey: .friends) ?? d.friends
+        friends = (try? c.decodeIfPresent([Friend].self, forKey: .friends)) ?? d.friends
         localCardID = try c.decodeIfPresent(UUID.self, forKey: .localCardID) ?? d.localCardID
         hasCompletedOnboarding = try c.decodeIfPresent(Bool.self, forKey: .hasCompletedOnboarding) ?? d.hasCompletedOnboarding
         userName = try c.decodeIfPresent(String.self, forKey: .userName) ?? d.userName
@@ -84,6 +86,7 @@ struct AppSnapshot: Codable, Sendable {
         dismissedDetections = try c.decodeIfPresent(Set<UUID>.self, forKey: .dismissedDetections) ?? d.dismissedDetections
         goals = try c.decodeIfPresent([String: AreaGoal].self, forKey: .goals) ?? d.goals
         celebratedRings = try c.decodeIfPresent(Set<String>.self, forKey: .celebratedRings) ?? d.celebratedRings
-        animoji = try c.decodeIfPresent([FacePose].self, forKey: .animoji) ?? d.animoji
+        animoji = (try? c.decodeIfPresent(BrainClip.self, forKey: .animoji)) ?? d.animoji
+        hunches = (try? c.decodeIfPresent([Hunch].self, forKey: .hunches)) ?? d.hunches
     }
 }

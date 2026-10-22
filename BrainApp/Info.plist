@@ -5,6 +5,7 @@
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_brain-p2p._tcp</string>
+		<string>_brain-link._tcp</string>
 	</array>
 </dict>
 </plist>

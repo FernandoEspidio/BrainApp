@@ -7,33 +7,50 @@ import Observation
 @Observable
 final class AppModel {
     private(set) var repository: LocalRepository
-    private(set) var isDemoMode: Bool
+    /// Which sample profile is showing (nil = your real data).
+    private(set) var demoProfile: DemoProfile?
     private(set) var nearby: NearbySharingCoordinator
     /// What the user chose to share (Friends tab). Every sharing flow uses it.
     var shareOptions = ShareOptions()
 
+    var isDemoMode: Bool { demoProfile != nil }
+
     private let realRepository: LocalRepository
-    private static let demoModeKey = "demoMode"
+    private static let demoProfileKey = "demoProfile"
+    private static let legacyDemoModeKey = "demoMode"
 
     init(realStore: SnapshotStore? = nil) {
         // Created inside the (main-actor) body instead of as a default argument, which is evaluated nonisolated.
         let real = LocalRepository(store: realStore ?? FileSnapshotStore(), isDemo: false)
-        let demo = UserDefaults.standard.bool(forKey: Self.demoModeKey)
+        let defaults = UserDefaults.standard
+        var profile = defaults.string(forKey: Self.demoProfileKey).flatMap(DemoProfile.init(rawValue:))
+        if profile == nil && defaults.bool(forKey: Self.legacyDemoModeKey) { profile = .full }
         realRepository = real
-        isDemoMode = demo
-        repository = demo ? Self.makeDemoRepository() : real
-        nearby = NearbySharingCoordinator(transports: NearbyTransportFactory.make(isDemo: demo))
+        demoProfile = profile
+        repository = profile.map(Self.makeDemoRepository) ?? real
+        nearby = NearbySharingCoordinator(transports: NearbyTransportFactory.make(isDemo: profile != nil))
     }
 
-    /// Demo mode uses an in-memory store with fictional data.
+    /// Sample profiles use an in-memory store with fictional data.
     /// Real entries are not read, modified or mixed in.
-    func setDemoMode(_ enabled: Bool) {
-        guard enabled != isDemoMode else { return }
+    func setDemoProfile(_ profile: DemoProfile?) {
+        guard profile != demoProfile else { return }
         nearby.cancel()
-        isDemoMode = enabled
-        UserDefaults.standard.set(enabled, forKey: Self.demoModeKey)
-        repository = enabled ? Self.makeDemoRepository() : realRepository
-        nearby = NearbySharingCoordinator(transports: NearbyTransportFactory.make(isDemo: enabled))
+        demoProfile = profile
+        let defaults = UserDefaults.standard
+        defaults.set(profile?.rawValue, forKey: Self.demoProfileKey)
+        defaults.removeObject(forKey: Self.legacyDemoModeKey)
+        repository = profile.map(Self.makeDemoRepository) ?? realRepository
+        shareOptions = ShareOptions()
+        nearby = NearbySharingCoordinator(transports: NearbyTransportFactory.make(isDemo: profile != nil))
+    }
+
+    func setDemoMode(_ enabled: Bool) { setDemoProfile(enabled ? .full : nil) }
+
+    /// A brain trade always looks for real nearby phones, also with a sample profile
+    /// (so two phones in Demo can trade). "Practice" inside the trade uses a fictional friend.
+    func makeBrainLink() -> BrainLinkSession {
+        BrainLinkSession(mode: .network)
     }
 
     /// The card built from the user's current share choices.
@@ -45,6 +62,7 @@ final class AppModel {
             appearance: repository.snapshot.companion,
             stage: repository.companionStage,
             discoveries: repository.rankedDiscoveries,
+            hunches: repository.snapshot.hunches,
             options: options,
             isDemo: repository.isDemo,
             mood: repository.companionState().mood,
@@ -53,7 +71,10 @@ final class AppModel {
         )
     }
 
-    private static func makeDemoRepository() -> LocalRepository {
-        LocalRepository(store: InMemorySnapshotStore(initial: DemoData.makeSnapshot()), isDemo: true)
+    private static func makeDemoRepository(_ profile: DemoProfile) -> LocalRepository {
+        let repo = LocalRepository(store: InMemorySnapshotStore(initial: DemoData.makeSnapshot(profile: profile)), isDemo: true)
+        // Sample rings start already closed: don't greet the viewer with a stack of celebrations.
+        for ring in repo.rings() where ring.isComplete { repo.markCelebrated(ring) }
+        return repo
     }
 }

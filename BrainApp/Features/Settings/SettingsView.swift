@@ -8,12 +8,17 @@ struct SettingsView: View {
         let repo = model.repository
         Form {
             Section {
-                Toggle("Demo mode", isOn: Binding(
-                    get: { model.isDemoMode },
-                    set: { model.setDemoMode($0) }
-                ))
+                Picker("Data", selection: Binding(
+                    get: { model.demoProfile?.rawValue ?? "" },
+                    set: { model.setDemoProfile(DemoProfile(rawValue: $0)) }
+                )) {
+                    Text("My brain").tag("")
+                    ForEach(DemoProfile.allCases) { profile in
+                        Text(profile.title).tag(profile.rawValue)
+                    }
+                }
             } footer: {
-                Text("Sample data · your entries stay untouched")
+                Text("Sample profiles are fictional · your entries stay untouched")
             }
 
             Section("Personalization") {
@@ -49,6 +54,19 @@ struct SettingsView: View {
                 Text("Data sources")
             } footer: {
                 Text("Simulated until real sensors are connected")
+            }
+
+            Section {
+                NavigationLink { PeerToPeerTestView() } label: {
+                    Label("Swap cards (connection test)", systemImage: "antenna.radiowaves.left.and.right")
+                }
+                NavigationLink { ThrowTestView() } label: {
+                    Label("Throw your brain (UWB test)", systemImage: "hand.point.up.left.fill")
+                }
+            } header: {
+                Text("Prototype lab")
+            } footer: {
+                Text("Early experiments, kept for the team. The real trade lives in Friends.")
             }
 
             Section {

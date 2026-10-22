@@ -211,8 +211,49 @@ final class LocalRepository {
 
     // MARK: - Brain animoji
 
-    func setAnimoji(_ frames: [FacePose]) {
-        mutate(refresh: false) { $0.animoji = Array(frames.prefix(AnimojiClip.maxFrames)) }
+    func setAnimoji(_ clip: BrainClip) {
+        mutate(refresh: false) { $0.animoji = clip }
+    }
+
+    // MARK: - Hunches
+
+    var testingHunches: [Hunch] { snapshot.hunches.filter { $0.status == .testing } }
+    var confirmedHunches: [Hunch] { snapshot.hunches.filter { $0.status == .confirmed } }
+
+    func hunch(id: UUID) -> Hunch? { snapshot.hunches.first { $0.id == id } }
+
+    /// The hunch to ask about today (one at a time): not answered today, oldest first.
+    func hunchToCheckIn(now: Date = .now) -> Hunch? {
+        testingHunches.first { $0.answer(on: now) == nil && !$0.isReadyToDecide }
+    }
+
+    func addHunch(_ hunch: Hunch) {
+        var clean = hunch
+        clean.statement = String(hunch.statement.trimmingCharacters(in: .whitespacesAndNewlines).prefix(80))
+        guard !clean.statement.isEmpty else { return }
+        mutate(refresh: false) { $0.hunches.insert(clean, at: 0) }
+    }
+
+    /// One answer per day: answering again replaces today's answer.
+    func checkIn(_ answer: Hunch.Answer, for hunchID: UUID, now: Date = .now, calendar: Calendar = .current) {
+        mutate(refresh: false) { s in
+            guard let index = s.hunches.firstIndex(where: { $0.id == hunchID }) else { return }
+            s.hunches[index].checkIns.removeAll { calendar.isDate($0.day, inSameDayAs: now) }
+            s.hunches[index].checkIns.append(Hunch.CheckIn(day: now, answer: answer))
+        }
+    }
+
+    func setHunchStatus(_ status: Hunch.Status, for hunchID: UUID) {
+        mutate(refresh: false) { s in
+            guard let index = s.hunches.firstIndex(where: { $0.id == hunchID }) else { return }
+            s.hunches[index].status = status
+            // "Keep testing" adds a few more days.
+            if status == .testing { s.hunches[index].targetCheckIns = s.hunches[index].answeredCount + 3 }
+        }
+    }
+
+    func deleteHunch(_ hunchID: UUID) {
+        mutate(refresh: false) { $0.hunches.removeAll { $0.id == hunchID } }
     }
 
     // MARK: - Erase
@@ -248,7 +289,8 @@ final class LocalRepository {
         let discoveries = report.discoveries.count * 2
         let finished = snapshot.experiments.filter { $0.status == .finished }.count * 2
         let reflections = snapshot.feedback.values.filter { !$0.context.isEmpty }.count
-        let points = areasWithData + discoveries + finished + reflections
+        let hunches = snapshot.hunches.filter { $0.status != .testing }.count * 2
+        let points = areasWithData + discoveries + finished + reflections + hunches
         if points > snapshot.understandingHighWater {
             snapshot.understandingHighWater = points
         }
